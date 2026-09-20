@@ -12,6 +12,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 2 | Giỗ âm lịch / sinh nhật + nhắc trước N ngày | ✅ xong |
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
+| 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
 | 4 | Biểu đồ nâng cao | ✅ bản cơ bản đã có |
 | 5 | Tài khoản con, thời khoá biểu, tiến độ học | ⬜ (model DB đã sẵn) |
 | 6 | Nhập bằng giọng nói | ⬜ |
@@ -28,6 +29,21 @@ gửi** thay vì lúc sinh lịch — ngày chưa xảy ra thì chưa biết b�
 Nhắc sự kiện chỉ gửi cho thành viên **phụ huynh** — giỗ chạp và sinh nhật là
 việc người lớn chuẩn bị, không cần dựng con dậy lúc 8h sáng.
 
+Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
+- **2 bước**: TOTP chuẩn RFC 6238, tự viết ([lib/totp.ts](apps/server/src/lib/totp.ts)),
+  bí mật mã hoá AES-GCM bằng `SESSION_SECRET`, 8 mã khôi phục lưu dạng hash.
+  Sai 5 lần trong 15 phút thì khoá. Tắt cần cả mật khẩu lẫn mã.
+- **Passkey**: `@simplewebauthn`, discoverable credential nên đăng nhập không
+  cần gõ email; tự nó là đa yếu tố nên bỏ qua bước TOTP. rpID lấy từ
+  `WEB_ORIGIN` — đổi domain là passkey cũ vô hiệu (đúng thiết kế WebAuthn).
+- **Tải dữ liệu**: `GET /export` trả JSON theo đúng quyền xem trong app —
+  phụ huynh cả nhà, con của mình; nhật ký riêng tư của người khác không lọt ra.
+
+> **Passkey chưa được bấm thử trên thiết bị thật** — server có test đi hết
+> đường đăng ký → đăng nhập bằng authenticator phần mềm (ES256), nhưng
+> `navigator.credentials.create()` cần cử chỉ người dùng nên không tự động
+> hoá được. Hãy thử "+ Thêm" passkey trên điện thoại sau khi deploy.
+>
 > **Web Push chưa được kiểm chứng trên thiết bị thật.** Luồng server có test,
 > nhưng service worker bị chặn trong môi trường sandbox lúc phát triển. Hãy thử
 > nút “Gửi thử” trong Cài đặt trên máy/điện thoại của bạn trước khi tin vào nó.

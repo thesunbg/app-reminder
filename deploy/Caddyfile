@@ -13,6 +13,9 @@
 	handle /health {
 		reverse_proxy server:3001
 	}
+	handle /export {
+		reverse_proxy server:3001
+	}
 
 	# PWA tĩnh — SPA fallback về index.html
 	handle {

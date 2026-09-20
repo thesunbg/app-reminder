@@ -97,8 +97,16 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
+  // đăng nhập 2 bước (TOTP). Bí mật được mã hoá AES-GCM bằng SESSION_SECRET,
+  // chỉ có hiệu lực khi totpEnabled = true (lúc đang thiết lập vẫn là false).
+  totpSecret    String?
+  totpEnabled   Boolean  @default(false)
+  /// SHA-256 của mã khôi phục còn dùng được; dùng rồi thì gỡ khỏi mảng
+  recoveryCodes String[] @default([])
+
   sessions      Session[]
   pushDevices   PushDevice[]
+  passkeys      Passkey[]
   routines      Routine[]
   notes         Note[]
   diaryEntries  DiaryEntry[]
@@ -116,6 +124,24 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   userAgent String?
+
+  @@index([userId])
+}
+
+/// Passkey (WebAuthn). Đăng nhập bằng passkey tự nó đã là đa yếu tố nên bỏ qua TOTP.
+model Passkey {
+  /// credential ID dạng base64url
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publicKey  Bytes
+  counter    BigInt   @default(0)
+  transports String[] @default([])
+  deviceType String   @default("singleDevice") // singleDevice | multiDevice
+  backedUp   Boolean  @default(false)
+  name       String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
 
   @@index([userId])
 }

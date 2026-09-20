@@ -4,6 +4,7 @@ import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify from 'fastify'
 import { db } from './db.js'
 import { env, isProd } from './env.js'
+import { registerExportRoute } from './export.js'
 import { startScheduler } from './notifications/scheduler.js'
 import { appRouter } from './trpc/router.js'
 import { createContext } from './trpc/trpc.js'
@@ -32,6 +33,8 @@ await app.register(fastifyTRPCPlugin, {
     },
   },
 })
+
+await registerExportRoute(app)
 
 app.get('/health', async () => {
   await db.$queryRaw`SELECT 1`

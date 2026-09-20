@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import NotifyLog from '@/components/NotifyLog'
 import NotifySettings from '@/components/NotifySettings'
+import SecuritySettings from '@/components/SecuritySettings'
 import { Avatar, Card, ErrorNote, Spinner } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
 
@@ -68,6 +69,8 @@ export default function Settings() {
       </Card>
 
       <NotifySettings />
+
+      <SecuritySettings />
 
       <NotifyLog />
     </div>

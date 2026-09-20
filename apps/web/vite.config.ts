@@ -28,7 +28,7 @@ export default defineConfig({
       },
       workbox: {
         // API không cache — dữ liệu nhắc việc phải luôn tươi.
-        navigateFallbackDenylist: [/^\/trpc/],
+        navigateFallbackDenylist: [/^\/trpc/, /^\/export/],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // handler cho push + notificationclick; file JS thuần ở public/
         importScripts: ['/push-handler.js'],
@@ -44,6 +44,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
+      '/export': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
   // `vite preview` dùng cấu hình proxy riêng — cần cho việc thử Web Push
@@ -52,6 +53,7 @@ export default defineConfig({
     port: 4173,
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
+      '/export': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
 })
