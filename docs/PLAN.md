@@ -144,10 +144,10 @@ Nguyên tắc: **mọi thứ cần nhắc đều đẻ ra dòng trong `notificat
 | ~~**1**~~ | ✅ Routine + checklist hằng ngày + **notification engine** + kênh Telegram | xong | **Đã nhắc được việc hàng ngày — dùng thật từ đây** |
 | ~~**2**~~ | ✅ Event âm/dương lịch + nhắc trước N ngày | xong | Không quên giỗ, sinh nhật |
 | ~~**3**~~ | ✅ Ghi chú kiểu Google Keep — văn bản, checklist, màu, nhãn, ghim, lưu trữ, chia sẻ, và nhắc nhở tuỳ chọn có lặp (bao trùm "thay dầu xe ngày xxx"). ✅ Nhật ký viết tay + tự tổng hợp từ thao tác | xong | Đủ bộ cá nhân |
-| **4** | Biểu đồ thống kê (streak, giờ học/tuần, tỉ lệ hoàn thành, heatmap) | 4 ngày | Nhìn thấy tiến bộ |
-| **5** | Tài khoản con, thời khoá biểu, điểm/bài tập, dashboard phụ huynh | 1.5 tuần | Theo dõi được con |
-| **6** | Nhập bằng giọng nói + LLM parse thành lệnh | 1 tuần | Nhập siêu nhanh |
-| **7** | Bọc Capacitor → app iOS/Android, push native, local notification | 1 tuần | App thật trên điện thoại |
+| ~~**4**~~ | ✅ Biểu đồ thống kê (streak, giờ học/tuần, tỉ lệ hoàn thành, heatmap) | xong | Nhìn thấy tiến bộ |
+| ~~**5**~~ | ✅ Tài khoản con, thời khoá biểu, điểm/bài tập (có nhắc), dashboard phụ huynh | xong | Theo dõi được con |
+| ~~**6**~~ | ✅ Nhập bằng giọng nói + Claude parse thành lệnh (xem trước → xác nhận) | xong | Nhập siêu nhanh |
+| **7** | Bọc Capacitor → app iOS/Android, push native, local notification. *Cần Xcode + Apple Developer ($99/năm) và Android SDK — máy dev hiện chưa có.* | 1 tuần | App thật trên điện thoại |
 | **8** | *(tuỳ chọn)* Agent desktop Tauri: báo cáo app usage, auto-diary từ máy | 1-2 tuần | Nhật ký tự động, báo cáo máy con |
 
 **Tổng: ~9-10 tuần để có bản hoàn chỉnh; ~3 tuần đã có bản dùng thật hàng ngày.**
