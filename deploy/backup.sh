@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Backup DB hằng đêm. Cài vào crontab:
-#   0 2 * * * /srv/family-hub/deploy/backup.sh >> /var/log/family-hub-backup.log 2>&1
+#   0 2 * * * /data/app-reminder/deploy/backup.sh >> /var/log/family-hub-backup.log 2>&1
 #
 # Dữ liệu gia đình không có bản sao ở đâu khác — tự chủ hạ tầng
 # nghĩa là tự chịu trách nhiệm backup. Nhớ thử restore 1 lần/tháng.
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-/srv/family-hub/deploy/backup}"
+BACKUP_DIR="${BACKUP_DIR:-/data/app-reminder/deploy/backup}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 FILE="$BACKUP_DIR/family_hub-$STAMP.sql.gz"
 
 mkdir -p "$BACKUP_DIR"
 
-docker compose -f "$(dirname "$0")/docker-compose.yml" exec -T db \
+docker-compose -f "$(dirname "$0")/docker-compose.yml" exec -T db \
   pg_dump -U family_hub -d family_hub --clean --if-exists \
   | gzip -9 > "$FILE"
 

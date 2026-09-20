@@ -1,5 +1,8 @@
-# Dùng cho VPS. Máy dev trên macOS chạy Postgres trực tiếp qua brew,
-# không cần file này.
+# Chạy trên 202.92.6.172 (docker-compose v1.26 → giữ file version 2.4).
+# nginx ở 202.92.6.143 proxy reminder.nguyenvando.com → 202.92.6.172:${APP_PORT}.
+# Máy dev trên macOS chạy Postgres trực tiếp qua brew, không cần file này.
+version: '2.4'
+
 services:
   db:
     image: postgres:16-alpine
@@ -37,20 +40,13 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       TZ: Asia/Ho_Chi_Minh
 
-  caddy:
-    image: caddy:2-alpine
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
-    ports: ['80:80', '443:443']
     depends_on: [server]
-    environment:
-      DOMAIN: ${DOMAIN:?bat buoc dat DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../apps/web/dist:/srv/web:ro
-      - caddydata:/data
-      - caddyconfig:/config
+    ports: ['${APP_PORT:-5599}:80']
 
 volumes:
   pgdata:
-  caddydata:
-  caddyconfig:

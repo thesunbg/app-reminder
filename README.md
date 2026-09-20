@@ -160,22 +160,34 @@ Test chạy trên `family_hub_test`, **không dùng chung DB dev** — dev serve
 scheduler chạy mỗi 30 giây và sẽ cướp mất thông báo mà test vừa tạo. Các file
 test cũng chạy tuần tự (`--test-concurrency=1`) vì cùng đụng một database.
 
-## Deploy lên VPS
+## Deploy (CI/CD)
+
+Production: **https://reminder.nguyenvando.com**
+
+- Push lên `main` → GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml))
+  chạy typecheck + test (Postgres riêng trong CI), pass mới rsync code lên
+  `202.92.6.172:/data/app-reminder` và `docker-compose up -d --build`.
+- PR nào cũng chạy test — kể cả PR tạo từ Claude trên điện thoại.
+- `202.92.6.143` chỉ chạy nginx + certbot, proxy subdomain → `202.92.6.172:5599`
+  (`/etc/nginx/site-node/reminder.nguyenvando.com.conf`).
+- Trong container: Caddy serve PWA tĩnh + proxy `/trpc` → server. Scheduler chạy
+  ngay trong tiến trình server nên không có service nào khác phải giữ sống.
+
+Secret cần có trên GitHub: `DEPLOY_SSH_KEY` (private key đã cài vào
+`authorized_keys` của root@202.92.6.172). Biến môi trường thật nằm ở
+`/data/app-reminder/deploy/.env` trên server, không đi qua git.
+
+Deploy tay khi cần:
 
 ```bash
-cp deploy/.env.example deploy/.env    # điền DOMAIN, mật khẩu, secret
-pnpm --filter @fh/web build           # build PWA tĩnh cho Caddy phục vụ
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+ssh -p 24700 root@202.92.6.172 'cd /data/app-reminder/deploy && docker-compose up -d --build'
 ```
 
-Caddy tự xin chứng chỉ HTTPS theo `DOMAIN`. Scheduler chạy ngay trong tiến
-trình server nên không có service nào khác phải giữ sống.
-
-Sau khi chạy được, cài cron backup:
+Cron backup trên 202.92.6.172:
 
 ```bash
 crontab -e
-# 0 2 * * * /srv/family-hub/deploy/backup.sh >> /var/log/family-hub-backup.log 2>&1
+# 0 2 * * * /data/app-reminder/deploy/backup.sh >> /var/log/family-hub-backup.log 2>&1
 ```
 
 Backup không phải việc làm sau. Dữ liệu này không có bản sao ở đâu khác.

@@ -1,0 +1,92 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck + test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: family_hub_test
+          POSTGRES_USER: family_hub
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U family_hub -d family_hub_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fh/server db:generate
+      - run: pnpm typecheck
+
+      # Test luôn dùng DB riêng (service container), không bao giờ đụng DB thật.
+      - name: Tạo .env.test
+        working-directory: apps/server
+        run: |
+          KEYS=$(node -e "const k=require('web-push').generateVAPIDKeys();console.log(k.publicKey+' '+k.privateKey)")
+          cat > .env.test <<ENV
+          DATABASE_URL="postgresql://family_hub:test@localhost:5432/family_hub_test?schema=public"
+          SESSION_SECRET="ci-secret-khong-dung-that-0123456789abcdef"
+          NODE_ENV=test
+          VAPID_PUBLIC_KEY="${KEYS% *}"
+          VAPID_PRIVATE_KEY="${KEYS#* }"
+          VAPID_SUBJECT="mailto:ci@local"
+          ENV
+      - run: pnpm test
+      - run: pnpm --filter @fh/web build
+
+  deploy:
+    name: Deploy → reminder.nguyenvando.com
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HOST: 202.92.6.172
+      PORT: 24700
+      USER: root
+      DIR: /data/app-reminder
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
+      - name: Rsync source
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .git --exclude dist --exclude dev-dist \
+            --exclude '.env*' --exclude deploy/backup \
+            -e "ssh -i ~/.ssh/deploy -p $PORT" \
+            ./ "$USER@$HOST:$DIR/"
+      - name: Build + restart
+        run: |
+          ssh -i ~/.ssh/deploy -p "$PORT" "$USER@$HOST" bash -s <<'REMOTE'
+            set -euo pipefail
+            cd /data/app-reminder/deploy
+            test -f .env || { echo "❌ thiếu deploy/.env trên server"; exit 1; }
+            docker-compose build --pull
+            docker-compose up -d --remove-orphans
+            docker image prune -f >/dev/null
+            sleep 5
+            docker-compose ps
+            curl -fsS "http://127.0.0.1:$(grep -E '^APP_PORT=' .env | cut -d= -f2)/health" && echo
+          REMOTE

@@ -1,0 +1,16 @@
+# Build PWA rồi đóng gói vào Caddy để serve tĩnh + proxy /trpc sang server.
+# TLS do nginx ở máy 202.92.6.143 lo, container này chỉ nghe HTTP.
+FROM node:22-alpine AS build
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/
+COPY apps/server/package.json apps/server/
+# web import type AppRouter từ server → cần cả deps server + Prisma client để tsc chạy
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm --filter @fh/server db:generate && pnpm --filter @fh/web build
+
+FROM caddy:2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/apps/web/dist /srv/web

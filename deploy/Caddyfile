@@ -1,4 +1,9 @@
-{$DOMAIN} {
+# Chạy sau nginx (202.92.6.143) — nginx lo TLS và domain, Caddy chỉ nghe HTTP.
+{
+	auto_https off
+}
+
+:80 {
 	encode zstd gzip
 
 	# API
