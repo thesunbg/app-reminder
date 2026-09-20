@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import AssistantButton from '@/components/Assistant'
 import { Spinner } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
 import Login from '@/pages/Login'
@@ -85,6 +86,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      <AssistantButton />
 
       {/* Thanh tab dưới trên mobile */}
       <MobileNav />
