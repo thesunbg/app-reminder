@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
 import Login from '@/pages/Login'
+import CalendarPage from '@/pages/Calendar'
 import Diary from '@/pages/Diary'
 import Events from '@/pages/Events'
 import Notes from '@/pages/Notes'
@@ -28,6 +29,7 @@ const TABS = [
   { to: '/nhat-ky', label: 'Nhật ký', icon: '✍', end: false },
   { to: '/ghi-chu', label: 'Ghi chú', icon: '📝', end: false },
   { to: '/su-kien', label: 'Ngày lễ', icon: '🕯', end: false },
+  { to: '/lich', label: 'Lịch', icon: '📅', end: false },
   { to: '/thong-ke', label: 'Thống kê', icon: '◔', end: false },
   { to: '/hoc-tap', label: 'Học tập', icon: '🎓', end: false },
   { to: '/quan-ly', label: 'Quản lý', icon: '☰', end: false },
@@ -78,6 +80,7 @@ export default function App() {
           <Route path="/nhat-ky" element={<Diary />} />
           <Route path="/ghi-chu" element={<Notes />} />
           <Route path="/su-kien" element={<Events />} />
+          <Route path="/lich" element={<CalendarPage />} />
           <Route path="/thong-ke" element={<Suspense fallback={<Spinner label="Đang tải biểu đồ…" />}><Stats /></Suspense>} />
           <Route path="/hoc-tap" element={<Study />} />
           <Route path="/quan-ly" element={<Routines />} />

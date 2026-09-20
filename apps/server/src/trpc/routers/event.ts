@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { db } from '../../db.js'
-import { lunarOf, lunarToSolar, toSolarString } from '../../lib/lunar.js'
-import { addDays, diffDays, vnToday } from '../../lib/time.js'
+import { lunarMonthLength, lunarOf, lunarToSolar, toSolarString } from '../../lib/lunar.js'
+import { addDays, dateRange, diffDays, vnToday } from '../../lib/time.js'
 import {
   clearEventNotifications,
   materializeEventOccurrences,
@@ -12,6 +12,7 @@ import {
 import { protectedProcedure, router } from '../trpc.js'
 
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 const baseInput = z.object({
   title: z.string().trim().min(1).max(120),
@@ -54,6 +55,31 @@ function toData(input: z.infer<typeof createInput>) {
   }
   const { calendar, solarDate, yearly, ...common } = input
   return { ...common, calendar, solarDate, yearly, lunarDay: null, lunarMonth: null, lunarLeap: false }
+}
+
+async function calendarRange(familyId: string, from: string, to: string) {
+  const rows = await db.eventOccurrence.findMany({
+    where: { solarDate: { gte: from, lte: to }, event: { familyId } },
+    include: { event: true },
+    orderBy: { solarDate: 'asc' },
+  })
+  const byDate = new Map<string, typeof rows>()
+  for (const r of rows) byDate.set(r.solarDate, [...(byDate.get(r.solarDate) ?? []), r])
+  return dateRange(from, to).map((date) => {
+    const l = lunarOf(date)
+    return {
+      date,
+      lunar: { day: l.day, month: l.month, year: l.year, leap: l.leap },
+      events: (byDate.get(date) ?? []).map((o) => ({
+        occurrenceId: o.id,
+        id: o.event.id,
+        title: o.event.title,
+        type: o.event.type,
+        calendar: o.event.calendar,
+        note: o.event.note,
+      })),
+    }
+  })
 }
 
 async function assertInFamily(familyId: string, eventId: string) {
@@ -120,6 +146,34 @@ export const eventRouter = router({
         lunar: o.event.calendar === 'LUNAR' ? lunarOf(o.solarDate) : null,
         event: o.event,
       }))
+    }),
+
+  /**
+   * Lịch tháng dương: từng ngày kèm ngày âm + các sự kiện rơi vào ngày đó.
+   * Client vẽ lưới; server chỉ lo quy đổi âm lịch để một thuật toán duy nhất
+   * (Hồ Ngọc Đức, UTC+7) quyết định mọi ngày âm trong app.
+   */
+  calendar: protectedProcedure
+    .input(z.object({ from: dateSchema, to: dateSchema }))
+    .query(async ({ ctx, input }) => {
+      if (diffDays(input.from, input.to) > 62) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Tối đa 2 tháng' })
+      return calendarRange(ctx.user.familyId, input.from, input.to)
+    }),
+
+  /** Lịch một tháng ÂM: ngày 1 → cuối tháng, mỗi ngày kèm ngày dương tương ứng. */
+  lunarCalendar: protectedProcedure
+    .input(z.object({ year: z.number().int().min(1900).max(2199), month: z.number().int().min(1).max(12), leap: z.boolean().default(false) }))
+    .query(async ({ ctx, input }) => {
+      const len = lunarMonthLength(input.month, input.year, input.leap)
+      if (len === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Tháng âm không tồn tại (không có tháng nhuận này)' })
+      const first = lunarToSolar(1, input.month, input.year, input.leap)!
+      const from = toSolarString(first)
+      const to = addDays(from, len - 1)
+      const days = await calendarRange(ctx.user.familyId, from, to)
+      // tháng âm kế/trước để điều hướng — tháng nhuận nằm giữa nên phải dò
+      const prev = lunarOf(addDays(from, -1))
+      const next = lunarOf(addDays(to, 1))
+      return { from, to, length: len, days, prev: { year: prev.year, month: prev.month, leap: prev.leap }, next: { year: next.year, month: next.month, leap: next.leap } }
     }),
 
   create: protectedProcedure.input(createInput).mutation(async ({ ctx, input }) => {

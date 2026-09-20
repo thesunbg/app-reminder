@@ -241,3 +241,50 @@ describe('sinh lịch nhắc sự kiện', () => {
     assert.equal(new Set(dates).size, 4)
   })
 })
+
+// ---------- lịch tháng dương/âm ----------
+
+import { appRouter } from '../src/trpc/router.js'
+import type { Context } from '../src/trpc/trpc.js'
+
+async function callerAsParent() {
+  const user = await db.user.findUniqueOrThrow({ where: { id: parentId }, include: { family: true } })
+  const ctx = { req: { headers: {}, cookies: {} }, res: { setCookie() {}, clearCookie() {} }, session: { user }, user } as unknown as Context
+  return appRouter.createCaller(ctx)
+}
+
+describe('event.calendar / lunarCalendar', () => {
+  it('mỗi ngày dương kèm ngày âm, sự kiện rơi đúng ô; tối đa 2 tháng', async () => {
+    const caller = await callerAsParent()
+    // rằm tháng 7 âm năm nay
+    const ev = await makeEvent({})
+    await materializeEventOccurrences()
+    const occ = await db.eventOccurrence.findFirstOrThrow({ where: { eventId: ev.id, year: thisLunarYear } })
+    const month = occ.solarDate.slice(0, 7)
+    const from = `${month}-01`
+    const [y, mo] = month.split('-').map(Number) as [number, number]
+    const to = `${month}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`
+    const days = await caller.event.calendar({ from, to })
+    assert.equal(days[0]!.date, from)
+    const cell = days.find((d) => d.date === occ.solarDate)!
+    assert.deepEqual([cell.lunar.day, cell.lunar.month], [15, 7])
+    assert.deepEqual(cell.events.map((e) => e.title), ['Giỗ ông nội'])
+    // các ô khác không có sự kiện
+    assert.equal(days.filter((d) => d.events.length > 0).length, 1)
+    await assert.rejects(caller.event.calendar({ from: '2026-01-01', to: '2026-04-01' }), /Tối đa 2 tháng/)
+  })
+
+  it('tháng âm: đúng số ngày, ngày 1 khớp lunarToSolar, prev/next liền mạch', async () => {
+    const caller = await callerAsParent()
+    const m = await caller.event.lunarCalendar({ year: thisLunarYear, month: 7, leap: false })
+    assert.equal(m.length, lunarMonthLength(7, thisLunarYear, false))
+    assert.equal(m.days.length, m.length)
+    assert.equal(m.from, toSolarString(lunarToSolar(1, 7, thisLunarYear, false)!))
+    assert.deepEqual([m.days[0]!.lunar.day, m.days.at(-1)!.lunar.day], [1, m.length])
+    const next = await caller.event.lunarCalendar(m.next)
+    assert.equal(next.from, addDays(m.to, 1))
+    const prev = await caller.event.lunarCalendar(m.prev)
+    assert.equal(prev.to, addDays(m.from, -1))
+    await assert.rejects(caller.event.lunarCalendar({ year: 2026, month: 3, leap: true }), /không tồn tại/)
+  })
+})
