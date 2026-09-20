@@ -9,7 +9,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 |---|---|---|
 | 0 | Monorepo, DB, auth, model gia đình | ✅ xong |
 | 1 | Việc định kỳ + checklist + thống kê + **engine nhắc + Telegram + Web Push** | ✅ xong |
-| 2 | Giỗ âm lịch / sinh nhật + nhắc trước N ngày | ✅ xong |
+| 2 | Giỗ âm lịch / sinh nhật + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện | ✅ xong |
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
