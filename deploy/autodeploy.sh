@@ -16,8 +16,9 @@ cd "$ROOT"
 exec 9>/tmp/family-hub-deploy.lock
 flock -n 9 || exit 0   # lần trước còn đang chạy
 
+# git 1.8 (CentOS 7) không cập nhật origin/main khi fetch một nhánh → dùng FETCH_HEAD
 git fetch -q origin main
-git reset -q --hard origin/main
+git reset -q --hard FETCH_HEAD
 SHA=$(git rev-parse HEAD)
 
 CUR=$(grep -E '^TAG=' deploy/.env 2>/dev/null | cut -d= -f2 || true)
