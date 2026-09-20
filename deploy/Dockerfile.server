@@ -22,5 +22,7 @@ COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/server /app/apps/server
 WORKDIR /app/apps/server
 EXPOSE 3001
-# migrate trước khi chạy để deploy là một bước duy nhất
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/index.js"]
+# migrate trước khi chạy để deploy là một bước duy nhất.
+# Gọi thẳng bin trong node_modules — không qua pnpm/corepack để runtime
+# không phải tải gì từ mạng.
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node dist/index.js"]
