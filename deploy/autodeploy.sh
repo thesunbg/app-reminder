@@ -9,6 +9,8 @@
 # TAG được ghi vào deploy/.env để lần `docker-compose up -d` bằng tay sau đó
 # vẫn giữ đúng bản đang chạy. Rollback: sửa TAG trong .env rồi up -d.
 set -euo pipefail
+# cron chạy với PATH tối giản, docker-compose nằm ở /usr/local/bin
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -31,13 +33,13 @@ for svc in server web; do
 done
 
 cd deploy
+# TAG qua biến môi trường trước; chỉ ghi vào .env khi up -d đã thành công
+TAG=$SHA docker-compose up -d --remove-orphans
 if grep -qE '^TAG=' .env; then
   sed -i "s/^TAG=.*/TAG=$SHA/" .env
 else
   echo "TAG=$SHA" >> .env
 fi
-
-docker-compose up -d --remove-orphans
 docker image prune -f >/dev/null
 sleep 8
 PORT=$(grep -E '^APP_PORT=' .env | cut -d= -f2)
