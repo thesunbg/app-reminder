@@ -1,5 +1,8 @@
 # Chạy trên 202.92.6.172 (docker-compose v1.26 → giữ file version 2.4).
 # nginx ở 202.92.6.143 proxy reminder.nguyenvando.com → 202.92.6.172:${APP_PORT}.
+# Image build sẵn trên GitHub Actions (ghcr.io) — máy này chỉ pull, không build:
+# kernel 3.10 + seccomp Docker 19.03 trả EPERM ngẫu nhiên khi pnpm install.
+# Vì cùng lý do, server/web chạy seccomp:unconfined.
 # Máy dev trên macOS chạy Postgres trực tiếp qua brew, không cần file này.
 version: '2.4'
 
@@ -22,10 +25,12 @@ services:
       retries: 5
 
   server:
+    image: ghcr.io/thesunbg/app-reminder-server:${TAG:-latest}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.server
     restart: unless-stopped
+    security_opt: ['seccomp:unconfined']
     depends_on:
       db: { condition: service_healthy }
     environment:
@@ -41,10 +46,12 @@ services:
       TZ: Asia/Ho_Chi_Minh
 
   web:
+    image: ghcr.io/thesunbg/app-reminder-web:${TAG:-latest}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
+    security_opt: ['seccomp:unconfined']
     depends_on: [server]
     ports: ['${APP_PORT:-5599}:80']
 

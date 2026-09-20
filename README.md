@@ -165,8 +165,10 @@ test cũng chạy tuần tự (`--test-concurrency=1`) vì cùng đụng một d
 Production: **https://reminder.nguyenvando.com**
 
 - Push lên `main` → GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml))
-  chạy typecheck + test (Postgres riêng trong CI), pass mới rsync code lên
-  `202.92.6.172:/data/app-reminder` và `docker-compose up -d --build`.
+  chạy typecheck + test (Postgres riêng trong CI) → build image server/web đẩy lên
+  `ghcr.io/thesunbg/app-reminder-*` → SSH vào `202.92.6.172` pull + `docker-compose up -d`.
+- Server **không build** image: kernel CentOS 7 + seccomp Docker 19.03 trả EPERM
+  ngẫu nhiên khi `pnpm install`. Cũng vì thế container chạy `seccomp:unconfined`.
 - PR nào cũng chạy test — kể cả PR tạo từ Claude trên điện thoại.
 - `202.92.6.143` chỉ chạy nginx + certbot, proxy subdomain → `202.92.6.172:5599`
   (`/etc/nginx/site-node/reminder.nguyenvando.com.conf`).
@@ -180,7 +182,7 @@ Secret cần có trên GitHub: `DEPLOY_SSH_KEY` (private key đã cài vào
 Deploy tay khi cần:
 
 ```bash
-ssh -p 24700 root@202.92.6.172 'cd /data/app-reminder/deploy && docker-compose up -d --build'
+ssh -p 24700 root@202.92.6.172 'cd /data/app-reminder/deploy && docker-compose pull && docker-compose up -d'
 ```
 
 Cron backup trên 202.92.6.172:

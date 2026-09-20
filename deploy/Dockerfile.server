@@ -1,4 +1,6 @@
 FROM node:22-alpine AS base
+# kernel CentOS 7 (3.10) + Docker 19.03 chặn io_uring → Node 20+ báo EPERM khi ghi file
+ENV UV_USE_IO_URING=0
 RUN corepack enable
 WORKDIR /app
 
