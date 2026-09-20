@@ -2,6 +2,7 @@ import { dispatchDue, releaseStuck } from './dispatch.js'
 import { materializeDigests } from '../diary/digest.js'
 import { materializeEventOccurrences, materializeEvents } from './events.js'
 import { materializeRoutines } from './materialize.js'
+import { materializeHomework } from './homework.js'
 import { materializeNotes } from './notes.js'
 import { pollTelegramOnce } from './telegram-poller.js'
 import { telegramEnabled, getMe } from '../lib/telegram.js'
@@ -43,9 +44,10 @@ export function startScheduler(log: { info: (o: unknown, m?: string) => void; er
     const occurrences = await materializeEventOccurrences()
     const events = await materializeEvents()
     const notes = await materializeNotes()
+    const homework = await materializeHomework()
     const digests = await materializeDigests()
-    if (routines + occurrences + events + notes + digests > 0) {
-      log.info({ routines, occurrences, events, notes, digests }, 'sinh thông báo mới')
+    if (routines + occurrences + events + notes + homework + digests > 0) {
+      log.info({ routines, occurrences, events, notes, homework, digests }, 'sinh thông báo mới')
     }
   })
 

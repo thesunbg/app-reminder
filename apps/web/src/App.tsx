@@ -8,6 +8,7 @@ import Events from '@/pages/Events'
 import Notes from '@/pages/Notes'
 import Routines from '@/pages/Routines'
 import Settings from '@/pages/Settings'
+import Study from '@/pages/Study'
 import Today from '@/pages/Today'
 import Week from '@/pages/Week'
 
@@ -28,6 +29,7 @@ const TABS = [
   { to: '/ghi-chu', label: 'Ghi chú', icon: '📝', end: false },
   { to: '/su-kien', label: 'Ngày lễ', icon: '🕯', end: false },
   { to: '/thong-ke', label: 'Thống kê', icon: '◔', end: false },
+  { to: '/hoc-tap', label: 'Học tập', icon: '🎓', end: false },
   { to: '/quan-ly', label: 'Quản lý', icon: '☰', end: false },
   { to: '/cai-dat', label: 'Cài đặt', icon: '⚙', end: false },
 ]
@@ -77,6 +79,7 @@ export default function App() {
           <Route path="/ghi-chu" element={<Notes />} />
           <Route path="/su-kien" element={<Events />} />
           <Route path="/thong-ke" element={<Suspense fallback={<Spinner label="Đang tải biểu đồ…" />}><Stats /></Suspense>} />
+          <Route path="/hoc-tap" element={<Study />} />
           <Route path="/quan-ly" element={<Routines />} />
           <Route path="/cai-dat" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

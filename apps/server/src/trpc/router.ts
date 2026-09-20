@@ -7,6 +7,7 @@ import { noteRouter } from './routers/note.js'
 import { notifyRouter } from './routers/notify.js'
 import { routineRouter } from './routers/routine.js'
 import { statsRouter } from './routers/stats.js'
+import { studyRouter } from './routers/study.js'
 
 export const appRouter = router({
   auth: authRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   notify: notifyRouter,
   routine: routineRouter,
   stats: statsRouter,
+  study: studyRouter,
 })
 
 export type AppRouter = typeof appRouter

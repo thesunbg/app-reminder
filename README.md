@@ -13,8 +13,8 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
-| 4 | Biểu đồ nâng cao | ✅ bản cơ bản đã có |
-| 5 | Tài khoản con, thời khoá biểu, tiến độ học | ⬜ (model DB đã sẵn) |
+| 4 | Biểu đồ nâng cao (heatmap, theo tuần/nhóm, theo thứ, lọc thành viên) | ✅ xong |
+| 5 | Học tập: thời khoá biểu, bài tập (nhắc 19:00 hôm trước + 07:00), điểm, dashboard phụ huynh | ✅ xong |
 | 6 | Nhập bằng giọng nói | ⬜ |
 | 7 | Đóng gói Capacitor (iOS/Android) | ⬜ |
 

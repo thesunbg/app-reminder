@@ -83,6 +83,7 @@ async function deliver(n: Notification): Promise<string[]> {
     n.kind === 'DAILY_DIGEST' ? '/nhat-ky'
     : n.refTable === 'note' ? '/ghi-chu'
     : n.refTable === 'event' ? '/su-kien'
+    : n.refTable === 'homework' ? '/hoc-tap'
     : '/'
 
   // Kênh được tính LẠI ở đây chứ không dùng n.channels đã chốt lúc materialize:

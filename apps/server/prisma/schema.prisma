@@ -49,6 +49,7 @@ enum NotificationKind {
   NOTE_AHEAD
   NOTE_DUE
   DAILY_DIGEST
+  HOMEWORK_DUE
 }
 
 enum NotificationStatus {
@@ -349,11 +350,15 @@ model StudyRecord {
   title    String
   score    Float?
   maxScore Float?
+  /// HOMEWORK/EXAM: hạn nộp hoặc ngày thi; SCORE: ngày có điểm
   date     String // "YYYY-MM-DD"
   note     String?
+  /// chỉ dùng cho HOMEWORK
+  doneAt   DateTime?
   createdAt DateTime @default(now())
 
   @@index([childId, date])
+  @@index([childId, kind, doneAt])
   @@index([childId, subject])
 }
 

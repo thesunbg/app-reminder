@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Avatar, EmptyState, Spinner } from '@/components/ui'
 import { addDays, fullDate, minutesLabel, nowVnTime, relativeDay, today } from '@/lib/format'
 import { trpc } from '@/lib/trpc'
@@ -54,6 +55,8 @@ export default function Today() {
           </div>
         </div>
       )}
+
+      {me.data?.role === 'CHILD' && isToday && <StudyToday childId={me.data.id} />}
 
       {day.isLoading && <Spinner />}
 
@@ -114,6 +117,48 @@ export default function Today() {
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/** Con nhìn thấy ngay hôm nay học gì và bài nào phải nộp — không phải mở tab khác. */
+function StudyToday({ childId }: { childId: string }) {
+  const utils = trpc.useUtils()
+  const d = trpc.study.dashboard.useQuery({ childId })
+  const toggle = trpc.study.homeworkToggle.useMutation({ onSuccess: () => void utils.study.invalidate() })
+  const x = d.data
+  if (!x) return null
+  const due = [...x.homework.overdue, ...x.homework.pending].filter((h) => h.date <= addDays(today(), 1))
+  if (x.todayClasses.length === 0 && due.length === 0) return null
+  return (
+    <div className="card mb-4 px-4 py-3">
+      <div className="mb-2 flex items-baseline justify-between">
+        <p className="text-sm font-semibold">🎓 Học tập</p>
+        <Link to="/hoc-tap" className="text-xs underline" style={{ color: 'var(--muted)' }}>xem hết</Link>
+      </div>
+      {x.todayClasses.length > 0 && (
+        <p className="mb-2 text-xs" style={{ color: 'var(--muted)' }}>
+          Hôm nay: {x.todayClasses.map((c) => c.subject).join(' · ')}
+        </p>
+      )}
+      {due.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {due.map((h) => (
+            <li key={h.id} className="flex items-center gap-2 text-sm">
+              <button
+                onClick={() => toggle.mutate({ id: h.id, done: true })}
+                aria-label="Đánh dấu xong"
+                className="h-5 w-5 shrink-0 rounded-full border-2"
+                style={{ borderColor: h.date < today() ? 'var(--danger)' : 'var(--border)' }}
+              />
+              <span className="font-medium">{h.title}</span>
+              <span className="text-xs" style={{ color: h.date < today() ? 'var(--danger)' : 'var(--muted)' }}>
+                {h.subject} · {h.date < today() ? 'quá hạn' : h.date === today() ? 'nộp hôm nay' : 'nộp ngày mai'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
