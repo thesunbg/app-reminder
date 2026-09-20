@@ -1,0 +1,26 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	# API
+	handle /trpc/* {
+		reverse_proxy server:3001
+	}
+	handle /health {
+		reverse_proxy server:3001
+	}
+
+	# PWA tĩnh — SPA fallback về index.html
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+
+		# service worker và manifest không được cache lâu, nếu không
+		# người dùng sẽ kẹt ở bản cũ sau khi deploy.
+		@nocache path /sw.js /manifest.webmanifest /index.html
+		header @nocache Cache-Control "no-cache, must-revalidate"
+
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+	}
+}

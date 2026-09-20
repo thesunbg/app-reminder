@@ -1,0 +1,366 @@
+// Family Hub — schema
+// Nguyên tắc: mọi thời điểm lưu UTC (DateTime), hiển thị theo Asia/Ho_Chi_Minh ở client.
+//             mọi "ngày" thuần lịch (ngày giỗ, ngày của task_log) lưu dạng String "YYYY-MM-DD"
+//             theo giờ VN để tránh lệch múi giờ khi so sánh.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARENT
+  CHILD
+}
+
+enum CalendarType {
+  SOLAR
+  LUNAR
+}
+
+enum EventType {
+  DEATH_ANNIVERSARY // giỗ
+  BIRTHDAY
+  OTHER
+}
+
+enum TaskStatus {
+  DONE
+  PARTIAL
+  SKIPPED
+}
+
+enum DiarySource {
+  MANUAL
+  AUTO_TASK
+  AUTO_DEVICE
+}
+
+enum NotificationKind {
+  ROUTINE_UPCOMING
+  ROUTINE_DUE
+  ROUTINE_NAG
+  EVENT_AHEAD
+  EVENT_TODAY
+  NOTE_AHEAD
+  NOTE_DUE
+  DAILY_DIGEST
+}
+
+enum NotificationStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("Asia/Ho_Chi_Minh")
+  createdAt DateTime @default(now())
+
+  users    User[]
+  events   Event[]
+  routines Routine[]
+  notes    Note[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  familyId     String
+  family       Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(PARENT)
+  birthday     String? // "YYYY-MM-DD"
+  avatarColor  String   @default("#6366f1")
+  // kênh nhắc
+  telegramChatId      String?
+  telegramLinkCode    String?   @unique
+  telegramLinkExpires DateTime?
+  notifyTelegram      Boolean   @default(true)
+  notifyWebPush       Boolean   @default(true)
+  /// Giờ VN gửi tổng kết cuối ngày kèm lời nhắc viết nhật ký. null = tắt.
+  dailyDigestAt       String?
+  // giờ yên lặng (giờ VN) — không bắn thông báo trong khoảng này
+  quietFrom           String?   // "22:30"
+  quietTo             String?   // "06:00"
+  // con: nhật ký riêng tư -> bố mẹ thấy có entry, không thấy nội dung
+  diaryPrivate Boolean  @default(true)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  sessions      Session[]
+  pushDevices   PushDevice[]
+  routines      Routine[]
+  notes         Note[]
+  diaryEntries  DiaryEntry[]
+  notifications Notification[]
+  classSchedule ClassSchedule[]
+  studyRecords  StudyRecord[]
+
+  @@index([familyId])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+
+  @@index([userId])
+}
+
+model PushDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  platform  String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------- Nhóm 1: việc hàng ngày theo thời khoá biểu ----------
+
+model Routine {
+  id       String @id @default(cuid())
+  familyId String
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    String  @default("general")
+  color       String  @default("#6366f1")
+  durationMin Int     @default(30)
+  timeOfDay   String // "HH:mm" giờ VN
+  rrule       String // RFC 5545, vd "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
+  startDate   String // "YYYY-MM-DD" — dtstart cho rrule
+  targetPerWeek Int?
+  remindBeforeMin Int  @default(10)
+  nagAfterMin     Int? // nhắc lại nếu chưa tick sau N phút
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+  archivedAt  DateTime?
+
+  logs TaskLog[]
+
+  @@index([familyId, active])
+  @@index([ownerId, active])
+}
+
+model TaskLog {
+  id        String     @id @default(cuid())
+  routineId String
+  routine   Routine    @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  date      String // "YYYY-MM-DD" giờ VN
+  status    TaskStatus
+  actualMin Int?
+  note      String?
+  doneAt    DateTime   @default(now())
+
+  @@unique([routineId, date])
+  @@index([date])
+}
+
+// ---------- Nhóm 2: sự kiện định kỳ (giỗ âm lịch, sinh nhật dương lịch) ----------
+
+model Event {
+  id       String @id @default(cuid())
+  familyId String
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  title    String
+  type     EventType    @default(OTHER)
+  calendar CalendarType @default(SOLAR)
+
+  // LUNAR
+  lunarDay   Int?
+  lunarMonth Int?
+  lunarLeap  Boolean @default(false)
+  // SOLAR: "MM-DD" cho lặp hàng năm, hoặc "YYYY-MM-DD" cho một lần
+  solarDate  String?
+  yearly     Boolean @default(true)
+
+  remindBeforeDays Int[]   @default([7, 3, 1, 0])
+  remindAtTime     String  @default("08:00") // giờ VN bắn nhắc trong ngày
+  note             String?
+  createdAt        DateTime @default(now())
+
+  occurrences EventOccurrence[]
+
+  @@index([familyId])
+}
+
+// cache ngày dương đã quy đổi, sinh trước 2 năm
+model EventOccurrence {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  year    Int
+  solarDate String // "YYYY-MM-DD"
+
+  @@unique([eventId, year])
+  @@index([solarDate])
+}
+
+// ---------- Nhóm 3: ghi chú (kiểu Google Keep) ----------
+
+enum NoteKind {
+  TEXT
+  CHECKLIST
+}
+
+model Note {
+  id       String @id @default(cuid())
+  familyId String
+  family   Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  ownerId  String
+  owner    User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  title String   @default("")
+  body  String   @default("")
+  kind  NoteKind @default(TEXT)
+  /// khoá màu (default/red/orange/...), client ánh xạ sang biến CSS cho cả sáng lẫn tối
+  color String   @default("default")
+  labels String[] @default([])
+
+  pinned    Boolean @default(false)
+  archived  Boolean @default(false)
+  /// chia sẻ cho cả nhà xem; mặc định ghi chú là riêng tư của người tạo
+  shared    Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  /// Nhắc nhở là TUỲ CHỌN của ghi chú — đây là chỗ bao trùm ca "thay dầu xe
+  /// ngày xxx". Không có remindDate thì note chỉ là ghi chú thường.
+  remindDate        String? // "YYYY-MM-DD"
+  remindAtTime      String  @default("08:00")
+  remindBeforeDays  Int[]   @default([1, 0])
+  /// lặp lại: xong thì tự đẻ ghi chú mới cách N ngày (vd thay dầu mỗi 180 ngày)
+  recurIntervalDays Int?
+  doneAt            DateTime?
+
+  items     NoteItem[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([familyId, archived])
+  @@index([ownerId, archived])
+  @@index([remindDate])
+}
+
+model NoteItem {
+  id     String @id @default(cuid())
+  noteId String
+  note   Note   @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  text      String
+  checked   Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@index([noteId])
+}
+
+// ---------- Nhóm 4: nhật ký ----------
+
+model DiaryEntry {
+  id      String      @id @default(cuid())
+  userId  String
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    String // "YYYY-MM-DD"
+  content String
+  mood    Int? // 1..5
+  source  DiarySource @default(MANUAL)
+  refId   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, date, source])
+  @@index([userId, date])
+}
+
+// ---------- Nhóm 5: theo dõi con ----------
+
+model ClassSchedule {
+  id      String @id @default(cuid())
+  childId String
+  child   User   @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  weekday   Int // 1=T2 .. 7=CN
+  period    Int
+  subject   String
+  room      String?
+  teacher   String?
+  startTime String // "HH:mm"
+  endTime   String
+  effectiveFrom String // "YYYY-MM-DD"
+  effectiveTo   String?
+
+  @@index([childId, weekday])
+}
+
+model StudyRecord {
+  id      String @id @default(cuid())
+  childId String
+  child   User   @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  subject  String
+  kind     String // HOMEWORK | EXAM | SCORE
+  title    String
+  score    Float?
+  maxScore Float?
+  date     String // "YYYY-MM-DD"
+  note     String?
+  createdAt DateTime @default(now())
+
+  @@index([childId, date])
+  @@index([childId, subject])
+}
+
+// ---------- Hạ tầng nhắc ----------
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind     NotificationKind
+  refTable String
+  refId    String
+  title    String
+  body     String
+
+  fireAt   DateTime // UTC
+  channels String[] @default(["telegram", "webpush"])
+  status    NotificationStatus @default(PENDING)
+  attempts  Int       @default(0)
+  claimedAt DateTime? // lúc worker nhận việc, dùng để phát hiện bản ghi kẹt
+  sentAt    DateTime?
+  error    String?
+  createdAt DateTime @default(now())
+
+  // tránh sinh trùng khi materialize lại
+  @@unique([userId, kind, refTable, refId, fireAt])
+  @@index([status, fireAt])
+}
+
+/// Key-value nhỏ cho trạng thái nền (vd offset getUpdates của Telegram).
+model AppState {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

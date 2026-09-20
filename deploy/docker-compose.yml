@@ -1,0 +1,56 @@
+# Dùng cho VPS. Máy dev trên macOS chạy Postgres trực tiếp qua brew,
+# không cần file này.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: family_hub
+      POSTGRES_USER: family_hub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?bat buoc dat POSTGRES_PASSWORD}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backup:/backup
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U family_hub -d family_hub']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://family_hub:${POSTGRES_PASSWORD}@db:5432/family_hub?schema=public
+      NODE_ENV: production
+      PORT: 3001
+      SESSION_SECRET: ${SESSION_SECRET:?bat buoc dat SESSION_SECRET}
+      WEB_ORIGIN: ${WEB_ORIGIN:?bat buoc dat WEB_ORIGIN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      TZ: Asia/Ho_Chi_Minh
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    depends_on: [server]
+    environment:
+      DOMAIN: ${DOMAIN:?bat buoc dat DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../apps/web/dist:/srv/web:ro
+      - caddydata:/data
+      - caddyconfig:/config
+
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

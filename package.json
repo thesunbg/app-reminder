@@ -1,0 +1,28 @@
+{
+  "name": "family-hub",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:server": "pnpm --filter @fh/server dev",
+    "dev:web": "pnpm --filter @fh/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @fh/server db:migrate",
+    "db:studio": "pnpm --filter @fh/server db:studio",
+    "db:seed": "pnpm --filter @fh/server db:seed",
+    "test": "pnpm --filter @fh/server test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "msgpackr-extract"
+    ]
+  }
+}
