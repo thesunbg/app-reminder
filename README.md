@@ -15,7 +15,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
 | 4 | Biểu đồ nâng cao (heatmap, theo tuần/nhóm, theo thứ, lọc thành viên) | ✅ xong |
 | 5 | Học tập: thời khoá biểu, bài tập (nhắc 19:00 hôm trước + 07:00), điểm, dashboard phụ huynh | ✅ xong |
-| 6 | Nhập bằng giọng nói + Claude parse thành hành động, xem trước rồi mới lưu | ✅ xong (cần `ANTHROPIC_API_KEY`) |
+| 6 | Nhập bằng giọng nói + LLM | ❌ bỏ — chủ nhà quyết định không cần AI, chỉ cần nhắc theo lịch |
 | 7 | Đóng gói Capacitor (iOS/Android) | ⬜ |
 
 Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ngày) / 60 ngày
@@ -39,18 +39,6 @@ Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 - **Tải dữ liệu**: `GET /export` trả JSON theo đúng quyền xem trong app —
   phụ huynh cả nhà, con của mình; nhật ký riêng tư của người khác không lọt ra.
 
-Trợ lý nhập liệu (nút 🎙 góc dưới): nói hoặc gõ một câu tiếng Việt → server gọi
-Claude (`claude-opus-5`, tool use, strict schema) → trả **bản xem trước** các
-hành động (việc định kỳ, giỗ/sinh nhật, ghi chú có hạn, nhật ký, tick việc,
-bài tập, điểm) → bạn xác nhận → server chạy lại đúng procedure hiện có
-(quyền và nhắc nhở đi cùng một đường). Không có key thì nút mic ẩn.
-Mã: [assistant/actions.ts](apps/server/src/assistant/actions.ts) (schema),
-[assistant/parse.ts](apps/server/src/assistant/parse.ts) (prompt + gọi API).
-
-> **Trợ lý chưa được gọi thật với API** — máy dev không có key. Test bao phủ
-> phần validate tool_use → action và phần thực thi; lời gọi Claude thì hãy thử
-> vài câu sau khi điền `ANTHROPIC_API_KEY` và chỉnh prompt nếu cần.
->
 > **Passkey chưa được bấm thử trên thiết bị thật** — server có test đi hết
 > đường đăng ký → đăng nhập bằng authenticator phần mềm (ES256), nhưng
 > `navigator.credentials.create()` cần cử chỉ người dùng nên không tự động

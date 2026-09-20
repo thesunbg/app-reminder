@@ -13,9 +13,6 @@ const schema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional().default(''),
   VAPID_PRIVATE_KEY: z.string().optional().default(''),
   VAPID_SUBJECT: z.string().optional().default(''),
-  // trợ lý giọng nói/LLM — không có key thì nút mic ẩn, app vẫn chạy bình thường
-  ANTHROPIC_API_KEY: z.string().optional().default(''),
-  ASSISTANT_MODEL: z.string().default('claude-opus-5'),
 })
 
 const parsed = schema.safeParse(process.env)
