@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { db } from '../../db.js'
 import { occurrencesBetween } from '../../lib/recurrence.js'
-import { addDays, dateRange, diffDays, vnToday } from '../../lib/time.js'
+import { addDays, dateRange, diffDays, isoWeekday, startOfWeek, vnToday } from '../../lib/time.js'
 import { protectedProcedure, router } from '../trpc.js'
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -50,6 +50,8 @@ export const statsRouter = router({
       const perDay = new Map<string, { due: number; done: number; minutes: number }>()
       const perCategory = new Map<string, { minutes: number; done: number }>()
       const perRoutine = new Map<string, { due: number; done: number; minutes: number }>()
+      // tuần (thứ 2 đầu tuần) → phút theo nhóm, để vẽ cột xếp chồng
+      const perWeek = new Map<string, Record<string, number>>()
 
       for (const [routineId, days] of due) {
         const routine = byRoutine.get(routineId)!
@@ -75,6 +77,9 @@ export const statsRouter = router({
             cat.minutes += minutes
             cat.done += weight
             perCategory.set(routine.category, cat)
+            const wk = perWeek.get(startOfWeek(date)) ?? {}
+            wk[routine.category] = (wk[routine.category] ?? 0) + minutes
+            perWeek.set(startOfWeek(date), wk)
           }
           perDay.set(date, slot)
           perRoutine.set(routineId, pr)
@@ -100,6 +105,17 @@ export const statsRouter = router({
         } else break
       }
 
+      // thứ nào trong tuần hay bỏ việc — gộp mọi ngày cùng thứ trong khoảng
+      const weekdayAgg = Array.from({ length: 7 }, () => ({ due: 0, done: 0 }))
+      for (const [date, slot] of perDay) {
+        const w = weekdayAgg[isoWeekday(date) - 1]!
+        w.due += slot.due
+        w.done += slot.done
+      }
+
+      const weekStarts: string[] = []
+      for (let w = startOfWeek(from); w <= to; w = addDays(w, 7)) weekStarts.push(w)
+
       return {
         from,
         to,
@@ -112,6 +128,12 @@ export const statsRouter = router({
         daily: dateRange(from, to).map((date) => ({
           date,
           ...(perDay.get(date) ?? { due: 0, done: 0, minutes: 0 }),
+        })),
+        weekly: weekStarts.map((week) => ({ week, ...(perWeek.get(week) ?? {}) })),
+        byWeekday: weekdayAgg.map((w, i) => ({
+          weekday: i + 1,
+          due: w.due,
+          rate: w.due === 0 ? null : Math.round((w.done / w.due) * 100),
         })),
         byCategory: [...perCategory.entries()]
           .map(([category, v]) => ({ category, ...v }))
