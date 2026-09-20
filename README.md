@@ -194,7 +194,13 @@ Production: **https://reminder.nguyenvando.com**
 
 - Push lên `main` → GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml))
   chạy typecheck + test (Postgres riêng trong CI) → build image server/web đẩy lên
-  `ghcr.io/thesunbg/app-reminder-*` → SSH vào `202.92.6.172` pull + `docker-compose up -d`.
+  `ghcr.io/thesunbg/app-reminder-*` gắn tag `latest` và `<sha>`.
+- **Deploy kiểu pull**: cron 2 phút/lần trên `202.92.6.172` chạy
+  [deploy/autodeploy.sh](deploy/autodeploy.sh): `git reset --hard origin/main`
+  (repo public, HTTPS) rồi chỉ `up -d` khi image `:<sha>` của HEAD đã có trên
+  ghcr.io. Không có secret nào trên GitHub. Từ push tới chạy ≈ 4–6 phút.
+  Log: `/var/log/family-hub-deploy.log`. Rollback: sửa `TAG=` trong
+  `deploy/.env` rồi `docker-compose up -d`.
 - Server **không build** image: kernel CentOS 7 + seccomp Docker 19.03 trả EPERM
   ngẫu nhiên khi `pnpm install`. Cũng vì thế container chạy `seccomp:unconfined`.
 - PR nào cũng chạy test — kể cả PR tạo từ Claude trên điện thoại.
@@ -203,14 +209,13 @@ Production: **https://reminder.nguyenvando.com**
 - Trong container: Caddy serve PWA tĩnh + proxy `/trpc` → server. Scheduler chạy
   ngay trong tiến trình server nên không có service nào khác phải giữ sống.
 
-Secret cần có trên GitHub: `DEPLOY_SSH_KEY` (private key đã cài vào
-`authorized_keys` của root@202.92.6.172). Biến môi trường thật nằm ở
-`/data/app-reminder/deploy/.env` trên server, không đi qua git.
+Biến môi trường thật nằm ở `/data/app-reminder/deploy/.env` trên server,
+không đi qua git.
 
-Deploy tay khi cần:
+Deploy tay khi cần (không muốn chờ cron):
 
 ```bash
-ssh -p 24700 root@202.92.6.172 'cd /data/app-reminder/deploy && docker-compose pull && docker-compose up -d'
+ssh -p 24700 root@202.92.6.172 /data/app-reminder/deploy/autodeploy.sh
 ```
 
 Cron backup trên 202.92.6.172:

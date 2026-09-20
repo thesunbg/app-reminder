@@ -81,48 +81,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.svc }}
           cache-to: type=gha,scope=${{ matrix.svc }},mode=max
 
-  deploy:
-    name: Deploy → reminder.nguyenvando.com
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    env:
-      HOST: 202.92.6.172
-      PORT: 24700
-      USER: root
-      DIR: /data/app-reminder
-    steps:
-      - uses: actions/checkout@v4
-      - name: SSH key
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy
-          chmod 600 ~/.ssh/deploy
-          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
-      - name: Rsync deploy/ (compose, backup.sh — không đụng .env)
-        run: |
-          rsync -az --exclude '.env' --exclude backup \
-            -e "ssh -i ~/.ssh/deploy -p $PORT" \
-            deploy/ "$USER@$HOST:$DIR/deploy/"
-      - name: Pull + restart
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.sha }}
-        run: |
-          ssh -i ~/.ssh/deploy -p "$PORT" "$USER@$HOST" \
-            "GHCR_TOKEN='$GHCR_TOKEN' TAG='$TAG' ACTOR='${{ github.actor }}' bash -s" <<'REMOTE'
-            set -euo pipefail
-            cd /data/app-reminder/deploy
-            test -f .env || { echo "❌ thiếu deploy/.env trên server"; exit 1; }
-            # token của job, hết hạn khi job xong — chỉ để pull image
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-            docker-compose pull server web
-            docker-compose up -d --remove-orphans
-            docker logout ghcr.io
-            docker image prune -f >/dev/null
-            sleep 8
-            docker-compose ps
-            curl -fsS "http://127.0.0.1:$(grep -E '^APP_PORT=' .env | cut -d= -f2)/health" && echo
-          REMOTE
+  # Deploy không nằm ở đây: server 202.92.6.172 tự kéo về theo cron
+  # (deploy/autodeploy.sh) khi thấy image gắn tag commit HEAD đã có trên ghcr.io.
+  # Nhờ vậy GitHub không cần giữ SSH key nào.

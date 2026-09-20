@@ -10,3 +10,4 @@ coverage/
 apps/web/dev-dist/
 .env.test
 *.tsbuildinfo
+deploy/backup/
