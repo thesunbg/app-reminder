@@ -88,6 +88,8 @@ model User {
   telegramLinkExpires DateTime?
   notifyTelegram      Boolean   @default(true)
   notifyWebPush       Boolean   @default(true)
+  /// Push native qua FCM (app Capacitor trên iOS/Android)
+  notifyNative        Boolean   @default(true)
   /// Giờ VN gửi tổng kết cuối ngày kèm lời nhắc viết nhật ký. null = tắt.
   dailyDigestAt       String?
   // giờ yên lặng (giờ VN) — không bắn thông báo trong khoảng này
@@ -107,6 +109,7 @@ model User {
 
   sessions      Session[]
   pushDevices   PushDevice[]
+  nativeDevices NativeDevice[]
   passkeys      Passkey[]
   routines      Routine[]
   notes         Note[]
@@ -156,6 +159,23 @@ model PushDevice {
   auth      String
   platform  String?
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Thiết bị chạy app Capacitor (iOS/Android). Token do FCM cấp, đổi bất cứ lúc
+/// nào nên app phải đăng ký lại mỗi lần mở — vì vậy token là khoá unique và
+/// upsert đè cả userId (một máy có thể đổi người đăng nhập).
+model NativeDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String // ios | android
+  model      String?
+  appVersion String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
 
   @@index([userId])
 }

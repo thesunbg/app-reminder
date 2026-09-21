@@ -2,6 +2,7 @@ import type { Notification } from '@prisma/client'
 import { db } from '../db.js'
 import { sendMessage, telegramEnabled } from '../lib/telegram.js'
 import { sendPushToUser, webPushEnabled } from '../lib/webpush.js'
+import { fcmEnabled, sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
 import { toTelegramHtml } from './messages.js'
 
@@ -92,6 +93,7 @@ async function deliver(n: Notification): Promise<string[]> {
   const wanted: string[] = []
   if (user.notifyTelegram && telegramEnabled() && user.telegramChatId) wanted.push('telegram')
   if (user.notifyWebPush && webPushEnabled()) wanted.push('webpush')
+  if (user.notifyNative && fcmEnabled()) wanted.push('native')
   if (wanted.length === 0) throw new Error('người dùng chưa bật kênh nhắc nào')
 
   const sent: string[] = []
@@ -105,6 +107,9 @@ async function deliver(n: Notification): Promise<string[]> {
       } else if (channel === 'webpush') {
         await sendPushToUser(user.id, { title, body, url, tag: n.refId })
         sent.push('webpush')
+      } else if (channel === 'native') {
+        await sendNativeToUser(user.id, { title, body, url, tag: n.refId })
+        sent.push('native')
       }
     } catch (err) {
       errors.push(`${channel}: ${(err as Error).message}`)

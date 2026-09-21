@@ -13,6 +13,12 @@ const schema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional().default(''),
   VAPID_PRIVATE_KEY: z.string().optional().default(''),
   VAPID_SUBJECT: z.string().optional().default(''),
+  // Push native (app Capacitor). Dán nguyên nội dung file service account JSON
+  // của Firebase. Rỗng = kênh native tắt, app vẫn chạy bình thường.
+  FCM_SERVICE_ACCOUNT: z.string().optional().default(''),
+  // chỉ đổi trong test để trỏ sang mock server
+  FCM_API_BASE: z.string().default('https://fcm.googleapis.com/v1/projects'),
+  FCM_TOKEN_URL: z.string().default('https://oauth2.googleapis.com/token'),
 })
 
 const parsed = schema.safeParse(process.env)

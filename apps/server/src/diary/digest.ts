@@ -2,6 +2,7 @@ import { db } from '../db.js'
 import { minutesText } from '../lib/text.js'
 import { vnDateTimeToUtc, vnToday } from '../lib/time.js'
 import { buildAutoSummary, getAutoEntry } from './auto.js'
+import { plannedChannels } from '../notifications/channels.js'
 
 export const digestRef = (date: string) => `digest:${date}`
 
@@ -20,9 +21,7 @@ export async function materializeDigests(now: Date = new Date()): Promise<number
 
   const plans = users
     .map((u) => {
-      const channels: string[] = []
-      if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-      if (u.notifyWebPush) channels.push('webpush')
+      const channels = plannedChannels(u)
       if (channels.length === 0) return null
 
       const fireAt = vnDateTimeToUtc(date, u.dailyDigestAt!)

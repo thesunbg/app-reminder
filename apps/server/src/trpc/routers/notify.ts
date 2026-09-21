@@ -5,6 +5,7 @@ import { db } from '../../db.js'
 import { env } from '../../env.js'
 import { sendMessage, telegramEnabled, escapeHtml } from '../../lib/telegram.js'
 import { sendPushToUser, webPushEnabled } from '../../lib/webpush.js'
+import { fcmConfigError, fcmEnabled, sendNativeToUser } from '../../lib/fcm.js'
 import { materializeRoutines } from '../../notifications/materialize.js'
 import { protectedProcedure, router } from '../trpc.js'
 
@@ -28,8 +29,8 @@ export const notifyRouter = router({
       where: { id: ctx.user.id },
       select: {
         telegramChatId: true, notifyTelegram: true, notifyWebPush: true,
-        quietFrom: true, quietTo: true,
-        _count: { select: { pushDevices: true } },
+        notifyNative: true, quietFrom: true, quietTo: true,
+        _count: { select: { pushDevices: true, nativeDevices: true } },
       },
     })
     return {
@@ -39,7 +40,11 @@ export const notifyRouter = router({
       telegramLinked: Boolean(me.telegramChatId),
       notifyTelegram: me.notifyTelegram,
       notifyWebPush: me.notifyWebPush,
+      notifyNative: me.notifyNative,
       pushDevices: me._count.pushDevices,
+      serverNativeReady: fcmEnabled(),
+      nativeConfigError: fcmConfigError(),
+      nativeDevices: me._count.nativeDevices,
       quietFrom: me.quietFrom,
       quietTo: me.quietTo,
     }
@@ -101,11 +106,66 @@ export const notifyRouter = router({
       return { ok: true }
     }),
 
+  /**
+   * App Capacitor báo token FCM của máy này. Gọi lại mỗi lần mở app: FCM có
+   * thể đổi token bất cứ lúc nào, và `lastSeenAt` cho biết máy nào còn dùng.
+   */
+  registerNative: protectedProcedure
+    .input(
+      z.object({
+        token: z.string().min(10).max(500),
+        platform: z.enum(['ios', 'android']),
+        model: z.string().max(80).optional(),
+        appVersion: z.string().max(40).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await db.nativeDevice.upsert({
+        where: { token: input.token },
+        create: { ...input, userId: ctx.user.id },
+        // cùng một máy có thể đổi người đăng nhập -> token phải theo chủ mới,
+        // nếu không nhắc của bố sẽ hiện trên máy con.
+        update: { ...input, userId: ctx.user.id, lastSeenAt: new Date() },
+      })
+      return { ok: true }
+    }),
+
+  unregisterNative: protectedProcedure
+    .input(z.object({ token: z.string().min(10).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      await db.nativeDevice.deleteMany({ where: { token: input.token, userId: ctx.user.id } })
+      return { ok: true }
+    }),
+
+  /**
+   * Danh sách nhắc sắp tới để app native tự đặt local notification.
+   *
+   * Lý do tồn tại: push chỉ tới khi máy có mạng và Apple/Google chịu chuyển.
+   * Local notification thì hệ điều hành tự bắn đúng giờ kể cả máy bay chế độ.
+   * App đặt lịch cục bộ, push đến thì trùng nội dung — `tag`/`thread-id` gộp
+   * lại nên người dùng không thấy hai lần.
+   */
+  upcoming: protectedProcedure
+    .input(z.object({ days: z.number().int().min(1).max(14).default(3) }).default({}))
+    .query(async ({ ctx, input }) => {
+      const until = new Date(Date.now() + input.days * 86_400_000)
+      const rows = await db.notification.findMany({
+        where: { userId: ctx.user.id, status: 'PENDING', fireAt: { gte: new Date(), lte: until } },
+        orderBy: { fireAt: 'asc' },
+        // iOS chỉ giữ 64 local notification đang chờ cho mỗi app; xin nhiều hơn
+        // thì hệ điều hành lặng lẽ bỏ phần thừa, mà bỏ phần nào thì không nói.
+        take: 60,
+        select: { id: true, kind: true, title: true, body: true, fireAt: true },
+      })
+      return rows
+    }),
+
   updatePreferences: protectedProcedure
     .input(
       z.object({
         notifyTelegram: z.boolean().optional(),
         notifyWebPush: z.boolean().optional(),
+        notifyNative: z.boolean().optional(),
         quietFrom: timeSchema.nullish(),
         quietTo: timeSchema.nullish(),
       }),
@@ -126,7 +186,7 @@ export const notifyRouter = router({
 
   /** Gửi thử ngay lập tức để kiểm tra kênh có hoạt động không. */
   sendTest: protectedProcedure
-    .input(z.object({ channel: z.enum(['telegram', 'webpush']) }))
+    .input(z.object({ channel: z.enum(['telegram', 'webpush', 'native']) }))
     .mutation(async ({ ctx, input }) => {
       const me = await db.user.findUniqueOrThrow({ where: { id: ctx.user.id } })
       if (input.channel === 'telegram') {
@@ -134,6 +194,17 @@ export const notifyRouter = router({
         if (!me.telegramChatId) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Bạn chưa liên kết Telegram' })
         await sendMessage(me.telegramChatId, `🔔 <b>Thử nhắc nhở</b>\nNếu bạn đọc được tin này, ${escapeHtml(me.name)} sẽ nhận được nhắc việc qua Telegram.`)
         return { ok: true, detail: 'Đã gửi vào Telegram' }
+      }
+      if (input.channel === 'native') {
+        if (!fcmEnabled()) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: fcmConfigError() ?? 'Server chưa cấu hình FCM' })
+        }
+        try {
+          const n = await sendNativeToUser(me.id, { title: '🔔 Thử nhắc nhở', body: 'Push native đang hoạt động.', url: '/' })
+          return { ok: true, detail: `Đã gửi tới ${n} thiết bị` }
+        } catch (err) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: (err as Error).message })
+        }
       }
       if (!webPushEnabled()) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Server chưa cấu hình VAPID' })
       try {

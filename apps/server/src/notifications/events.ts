@@ -3,6 +3,7 @@ import { db } from '../db.js'
 import { lunarMonthLength, lunarOf, lunarToSolar, toSolarString } from '../lib/lunar.js'
 import { addDays, diffDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { inQuietHours } from './materialize.js'
+import { plannedChannels } from './channels.js'
 
 /** Sinh trước lịch nhắc sự kiện cho bao nhiêu ngày tới. */
 const HORIZON_DAYS = 60
@@ -147,9 +148,7 @@ export async function materializeEvents(now: Date = new Date()): Promise<number>
     const offsets = [...new Set(event.remindBeforeDays)].filter((d) => d >= 0).sort((a, b) => b - a)
 
     for (const u of recipients) {
-      const channels: string[] = []
-      if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-      if (u.notifyWebPush) channels.push('webpush')
+      const channels = plannedChannels(u)
       if (channels.length === 0) continue
 
       for (const daysAhead of offsets) {

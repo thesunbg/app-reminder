@@ -40,6 +40,17 @@ jobs:
         working-directory: apps/server
         run: |
           KEYS=$(node -e "const k=require('web-push').generateVAPIDKeys();console.log(k.publicKey+' '+k.privateKey)")
+          # Service account giả, khoá sinh tại chỗ: đủ để test ký JWT mà không
+          # có bí mật thật nào trong repo hay trong secrets của GitHub.
+          SA=$(node -e "
+            const {generateKeyPairSync}=require('node:crypto');
+            const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+            console.log(JSON.stringify({
+              project_id:'family-hub-test',
+              client_email:'test@family-hub-test.iam.gserviceaccount.com',
+              private_key:privateKey.export({type:'pkcs8',format:'pem'}),
+            }));
+          ")
           cat > .env.test <<ENV
           DATABASE_URL="postgresql://family_hub:test@localhost:5432/family_hub_test?schema=public"
           SESSION_SECRET="ci-secret-khong-dung-that-0123456789abcdef"
@@ -47,6 +58,7 @@ jobs:
           VAPID_PUBLIC_KEY="${KEYS% *}"
           VAPID_PRIVATE_KEY="${KEYS#* }"
           VAPID_SUBJECT="mailto:ci@local"
+          FCM_SERVICE_ACCOUNT='${SA}'
           ENV
       - run: pnpm test
       - run: pnpm --filter @fh/web build

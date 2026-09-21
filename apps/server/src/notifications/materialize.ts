@@ -2,6 +2,7 @@ import { db } from '../db.js'
 import { occurrencesBetween } from '../lib/recurrence.js'
 import { addDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { routineDraft } from './messages.js'
+import { channelSelect, plannedChannels } from './channels.js'
 
 /** Sinh trước thông báo cho bao nhiêu ngày tới. */
 const HORIZON_DAYS = 14
@@ -41,8 +42,8 @@ export async function materializeRoutines(now: Date = new Date()): Promise<numbe
     include: {
       owner: {
         select: {
-          id: true, active: true, notifyTelegram: true, notifyWebPush: true,
-          telegramChatId: true, quietFrom: true, quietTo: true,
+          id: true, active: true, quietFrom: true, quietTo: true,
+          ...channelSelect,
         },
       },
     },
@@ -54,9 +55,7 @@ export async function materializeRoutines(now: Date = new Date()): Promise<numbe
     const u = r.owner
     if (!u.active) continue
 
-    const channels: string[] = []
-    if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-    if (u.notifyWebPush) channels.push('webpush')
+    const channels = plannedChannels(u)
     if (channels.length === 0) continue
 
     for (const date of occurrencesBetween(r.rrule, r.startDate, from, to)) {

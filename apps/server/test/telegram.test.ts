@@ -207,7 +207,7 @@ describe('telegram — gửi qua dispatch', () => {
     })
     await db.user.update({
       where: { id: userId },
-      data: { notifyTelegram: false, notifyWebPush: false },
+      data: { notifyTelegram: false, notifyWebPush: false, notifyNative: false },
     })
     const n = await db.notification.create({
       data: {
@@ -222,7 +222,10 @@ describe('telegram — gửi qua dispatch', () => {
     assert.equal(after.status, 'PENDING', 'thử lại chứ không vứt đi')
     assert.match(after.error ?? '', /chưa bật kênh/)
 
-    await db.user.update({ where: { id: userId }, data: { notifyTelegram: true, notifyWebPush: true } })
+    await db.user.update({
+      where: { id: userId },
+      data: { notifyTelegram: true, notifyWebPush: true, notifyNative: true },
+    })
     await db.routine.delete({ where: { id: routine.id } })
   })
 })

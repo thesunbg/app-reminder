@@ -2,6 +2,7 @@ import type { Note } from '@prisma/client'
 import { db } from '../db.js'
 import { addDays, diffDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { inQuietHours } from './materialize.js'
+import { plannedChannels } from '../notifications/channels.js'
 
 /** Sinh trước lịch nhắc ghi chú cho bao nhiêu ngày tới. */
 const HORIZON_DAYS = 60
@@ -64,9 +65,7 @@ export async function materializeNotes(now: Date = new Date()): Promise<number> 
     const offsets = [...new Set(note.remindBeforeDays)].filter((d) => d >= 0).sort((a, b) => b - a)
 
     for (const u of recipients) {
-      const channels: string[] = []
-      if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-      if (u.notifyWebPush) channels.push('webpush')
+      const channels = plannedChannels(u)
       if (channels.length === 0) continue
 
       for (const daysAhead of offsets) {

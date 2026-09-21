@@ -1,6 +1,7 @@
 import { db } from '../db.js'
 import { addDays, diffDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { inQuietHours } from './materialize.js'
+import { plannedChannels } from './channels.js'
 
 /**
  * Nhắc bài tập cho CON: 19:00 tối hôm trước và 07:00 sáng ngày nộp.
@@ -26,9 +27,7 @@ export async function materializeHomework(now: Date = new Date()): Promise<numbe
   for (const r of records) {
     const u = r.child
     if (!u.active) continue
-    const channels: string[] = []
-    if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-    if (u.notifyWebPush) channels.push('webpush')
+    const channels = plannedChannels(u)
     if (channels.length === 0) continue
 
     const d = `${Number(r.date.slice(8, 10))}/${Number(r.date.slice(5, 7))}`
