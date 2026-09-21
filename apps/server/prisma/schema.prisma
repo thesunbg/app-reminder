@@ -117,6 +117,8 @@ model User {
   notifications Notification[]
   classSchedule ClassSchedule[]
   studyRecords  StudyRecord[]
+  agentDevices  AgentDevice[]
+  screenReports ScreenReport[]
 
   @@index([familyId])
 }
@@ -380,6 +382,56 @@ model StudyRecord {
   @@index([childId, date])
   @@index([childId, kind, doneAt])
   @@index([childId, subject])
+}
+
+// ---------- Nhóm 6: agent máy tính (phase 8) ----------
+
+/// Một máy tính chạy agent báo cáo thời lượng dùng app.
+///
+/// Agent KHÔNG dùng session cookie: nó là tiến trình nền, không có trình duyệt
+/// và phải sống qua nhiều tháng. Thay vào đó nó giữ một token dài hạn, DB chỉ
+/// lưu SHA-256 — giống hệt cách Session lưu token.
+model AgentDevice {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 của token. Token thô chỉ hiện đúng một lần lúc tạo.
+  tokenHash String @unique
+  name     String // "MacBook của Minh"
+  platform String? // darwin | win32 | linux
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+  /// Lần báo cáo gần nhất nhận được bao nhiêu dòng — để biết agent có sống không
+  lastReportAt DateTime?
+
+  reports ScreenReport[]
+
+  @@index([userId])
+}
+
+/// Tổng thời lượng của một app trong một ngày, theo từng máy.
+///
+/// Khoá unique có cả deviceId: agent gửi **tổng cộng dồn của cả ngày** chứ
+/// không gửi phần chênh lệch, nên gửi lại bao nhiêu lần cũng ra cùng kết quả.
+/// Nếu khoá chỉ có (userId, date, app) thì hai máy của cùng một người sẽ ghi
+/// đè số của nhau.
+model ScreenReport {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId String
+  device   AgentDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  date     String // "YYYY-MM-DD" giờ VN
+  app      String
+  /// work | study | entertainment | social | other — xem lib/appCategory.ts
+  category String @default("other")
+  minutes  Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([deviceId, date, app])
+  @@index([userId, date])
 }
 
 // ---------- Hạ tầng nhắc ----------

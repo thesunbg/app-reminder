@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { db } from '../../db.js'
 import { buildAutoSummary, getAutoEntry } from '../../diary/auto.js'
+import { getDeviceEntry } from '../../diary/device.js'
 import { addDays, dateRange, vnToday } from '../../lib/time.js'
 import { protectedProcedure, router } from '../trpc.js'
 
@@ -45,6 +46,7 @@ export const diaryRouter = router({
           private: true,
           manual: manual ? { hasContent: true, length: manual.content.length, updatedAt: manual.updatedAt } : null,
           auto: null,
+          device: null,
           summary: null,
         }
       }
@@ -54,11 +56,17 @@ export const diaryRouter = router({
         ? await getAutoEntry(userId, date)
         : entries.find((e) => e.source === 'AUTO_TASK') ?? null
 
+      // Bản từ máy tính (phase 8) chỉ có khi nhà đã cài agent.
+      const device = userId === ctx.user.id
+        ? await getDeviceEntry(userId, date)
+        : entries.find((e) => e.source === 'AUTO_DEVICE') ?? null
+
       return {
         date,
         private: false,
         manual,
         auto,
+        device,
         summary: await buildAutoSummary(userId, date),
       }
     }),

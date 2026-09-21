@@ -32,7 +32,7 @@ export async function registerExportRoute(app: FastifyInstance) {
     // nhật ký: của mình luôn có; của người khác chỉ khi họ không để riêng tư
     const diaryUserIds = members.filter((m) => m.id === me.id || !m.diaryPrivate).map((m) => m.id)
 
-    const [routines, events, notes, diary, classSchedule, studyRecords] = await Promise.all([
+    const [routines, events, notes, diary, classSchedule, studyRecords, screenReports] = await Promise.all([
       db.routine.findMany({
         where: isParent ? { familyId } : { ownerId: me.id },
         include: { logs: { orderBy: { date: 'asc' } } },
@@ -54,6 +54,13 @@ export async function registerExportRoute(app: FastifyInstance) {
       }),
       db.classSchedule.findMany({ where: { childId: { in: memberIds } }, orderBy: [{ childId: 'asc' }, { weekday: 'asc' }, { period: 'asc' }] }),
       db.studyRecord.findMany({ where: { childId: { in: memberIds } }, orderBy: [{ childId: 'asc' }, { date: 'asc' }] }),
+      // Thời lượng dùng máy (phase 8). Không kèm tokenHash của agent — token
+      // trong file tải về là token đọc được của cả nhà.
+      db.screenReport.findMany({
+        where: { userId: { in: memberIds } },
+        select: { userId: true, date: true, app: true, category: true, minutes: true },
+        orderBy: [{ userId: 'asc' }, { date: 'asc' }, { app: 'asc' }],
+      }),
     ])
 
     const payload = {
@@ -69,6 +76,7 @@ export async function registerExportRoute(app: FastifyInstance) {
       diary,
       classSchedule,
       studyRecords,
+      screenReports,
     }
 
     const file = `family-hub-${vnToday()}.json`
