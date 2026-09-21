@@ -38,6 +38,7 @@ export default function Diary() {
   }, [day.data, dirty])
 
   const auto = day.data?.auto
+  const device = day.data?.device
   const summary = day.data?.summary
 
   return (
@@ -97,6 +98,25 @@ export default function Diary() {
                 </button>
               </div>
               <p className="whitespace-pre-wrap text-sm" style={{ color: 'var(--muted)' }}>{auto.content}</p>
+            </Card>
+          )}
+
+          {/* Từ agent máy tính (phase 8) — chỉ có khi nhà đã cài agent. */}
+          {device && (
+            <Card className="mb-3 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">💻 Từ máy tính</h2>
+                <button
+                  className="btn btn-ghost !px-2.5 !py-1 !text-xs"
+                  onClick={() => {
+                    setContent((c) => (c ? `${c}\n\n${device.content}` : device.content))
+                    setDirty(true)
+                  }}
+                >
+                  Chèn vào nhật ký
+                </button>
+              </div>
+              <p className="whitespace-pre-wrap text-sm" style={{ color: 'var(--muted)' }}>{device.content}</p>
             </Card>
           )}
 

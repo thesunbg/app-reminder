@@ -15,7 +15,7 @@
     "db:migrate": "pnpm --filter @fh/server db:migrate",
     "db:studio": "pnpm --filter @fh/server db:studio",
     "db:seed": "pnpm --filter @fh/server db:seed",
-    "test": "pnpm --filter @fh/server test"
+    "test": "pnpm --filter @fh/server test && node --test apps/agent/test/*.test.js"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

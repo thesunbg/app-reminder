@@ -61,6 +61,9 @@ jobs:
           FCM_SERVICE_ACCOUNT='${SA}'
           ENV
       - run: pnpm test
+      # apps/agent đứng ngoài workspace và không có dependency nào, nên chạy
+      # thẳng bằng node — không cần cài gì thêm.
+      - run: node --test apps/agent/test/*.test.js
       - run: pnpm --filter @fh/web build
 
   build:

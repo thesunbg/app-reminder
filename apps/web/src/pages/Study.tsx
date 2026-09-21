@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import ScreenTime from '@/components/ScreenTime'
 import { Avatar, Card, EmptyState, ErrorNote, Spinner, StatTile } from '@/components/ui'
 import { addDays, dayMonth, today, weekdayShort } from '@/lib/format'
 import { trpc, type RouterOutputs } from '@/lib/trpc'
 
-type Tab = 'tong-quan' | 'tkb' | 'bai-tap' | 'diem'
+type Tab = 'tong-quan' | 'tkb' | 'bai-tap' | 'diem' | 'may-tinh'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'tong-quan', label: 'Tổng quan' },
   { id: 'tkb', label: 'Thời khoá biểu' },
   { id: 'bai-tap', label: 'Bài tập' },
   { id: 'diem', label: 'Điểm' },
+  { id: 'may-tinh', label: 'Máy tính' },
 ]
 const WEEKDAYS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']
 
@@ -73,6 +75,7 @@ export default function Study() {
       {tab === 'tkb' && <Schedule childId={child.id} />}
       {tab === 'bai-tap' && <Homework childId={child.id} />}
       {tab === 'diem' && <Scores childId={child.id} />}
+      {tab === 'may-tinh' && <ScreenTime userId={child.id} canManage />}
     </div>
   )
 }

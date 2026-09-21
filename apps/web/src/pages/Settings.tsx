@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import NotifyLog from '@/components/NotifyLog'
 import NotifySettings from '@/components/NotifySettings'
+import ScreenTime from '@/components/ScreenTime'
 import SecuritySettings from '@/components/SecuritySettings'
 import { Avatar, Card, ErrorNote, Spinner } from '@/components/ui'
 import { clearLocalNotifications } from '@/lib/native'
@@ -78,6 +79,14 @@ export default function Settings() {
       </Card>
 
       <NotifySettings />
+
+      {/* Máy tính của chính mình. Báo cáo về máy của con nằm ở Học tập →
+          Máy tính; ở đây để phụ huynh (nhà có thể chưa có tài khoản con nào)
+          vẫn ghép được máy của mình. */}
+      <Card className="mb-4 p-4">
+        <h2 className="mb-3 font-semibold">Máy tính của tôi</h2>
+        {me.data && <ScreenTime userId={me.data.id} canManage />}
+      </Card>
 
       <SecuritySettings />
 

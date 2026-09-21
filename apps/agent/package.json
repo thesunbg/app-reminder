@@ -1,0 +1,12 @@
+{
+  "name": "@fh/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent máy tính: báo cáo thời lượng dùng app về Family Hub (Phase 8)",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node agent.js",
+    "test": "node --test test/*.test.js"
+  }
+}
