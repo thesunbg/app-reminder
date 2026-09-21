@@ -24,3 +24,18 @@ export function routineDraft(
 export function toTelegramHtml(d: Draft): string {
   return `<b>${escapeHtml(d.title)}</b>\n${escapeHtml(d.body)}`
 }
+
+/**
+ * Bấm vào thông báo thì mở màn hình nào.
+ *
+ * Dùng chung cho cả push (server gửi kèm `data.url`) lẫn local notification
+ * mà app tự đặt — hai đường phải dẫn tới cùng một chỗ, nếu không cùng một lời
+ * nhắc sẽ mở khác nhau tuỳ hôm đó máy có mạng hay không.
+ */
+export function notificationUrl(n: { kind: NotificationKind; refTable: string }): string {
+  if (n.kind === 'DAILY_DIGEST') return '/nhat-ky'
+  if (n.refTable === 'note') return '/ghi-chu'
+  if (n.refTable === 'event') return '/su-kien'
+  if (n.refTable === 'homework') return '/hoc-tap'
+  return '/'
+}

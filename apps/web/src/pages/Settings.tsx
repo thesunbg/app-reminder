@@ -3,6 +3,7 @@ import NotifyLog from '@/components/NotifyLog'
 import NotifySettings from '@/components/NotifySettings'
 import SecuritySettings from '@/components/SecuritySettings'
 import { Avatar, Card, ErrorNote, Spinner } from '@/components/ui'
+import { clearLocalNotifications } from '@/lib/native'
 import { trpc } from '@/lib/trpc'
 
 const COLORS = ['#4f46e5', '#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#0891b2', '#7c3aed', '#db2777']
@@ -11,7 +12,15 @@ export default function Settings() {
   const utils = trpc.useUtils()
   const me = trpc.auth.me.useQuery()
   const members = trpc.family.members.useQuery()
-  const logout = trpc.auth.logout.useMutation({ onSuccess: () => { void utils.invalidate() } })
+  const logout = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      // Trên điện thoại, lịch nhắc đã nằm sẵn trong hệ điều hành và không biết
+      // gì về phiên đăng nhập. Không xoá thì máy vẫn nhắc việc của người vừa
+      // đăng xuất — trên máy dùng chung là người khác đọc được.
+      void clearLocalNotifications()
+      void utils.invalidate()
+    },
+  })
   const [adding, setAdding] = useState(false)
 
   if (me.isLoading) return <Spinner />

@@ -7,6 +7,7 @@ import { sendMessage, telegramEnabled, escapeHtml } from '../../lib/telegram.js'
 import { sendPushToUser, webPushEnabled } from '../../lib/webpush.js'
 import { fcmConfigError, fcmEnabled, sendNativeToUser } from '../../lib/fcm.js'
 import { materializeRoutines } from '../../notifications/materialize.js'
+import { notificationUrl } from '../../notifications/messages.js'
 import { protectedProcedure, router } from '../trpc.js'
 
 // bỏ 0/O/1/I/L để người dùng không đọc nhầm khi gõ vào Telegram
@@ -155,9 +156,11 @@ export const notifyRouter = router({
         // iOS chỉ giữ 64 local notification đang chờ cho mỗi app; xin nhiều hơn
         // thì hệ điều hành lặng lẽ bỏ phần thừa, mà bỏ phần nào thì không nói.
         take: 60,
-        select: { id: true, kind: true, title: true, body: true, fireAt: true },
+        select: { id: true, kind: true, refTable: true, title: true, body: true, fireAt: true },
       })
-      return rows
+      // url tính bằng đúng hàm dispatch dùng cho push, để bấm vào local
+      // notification và bấm vào push mở cùng một màn hình.
+      return rows.map(({ refTable, ...r }) => ({ ...r, url: notificationUrl({ kind: r.kind, refTable }) }))
     }),
 
   updatePreferences: protectedProcedure

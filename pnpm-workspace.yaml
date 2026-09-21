@@ -1,3 +1,10 @@
 packages:
-  - 'apps/*'
+  - 'apps/server'
+  - 'apps/web'
   - 'packages/*'
+
+# apps/mobile (vỏ Capacitor) cố ý ĐỨNG NGOÀI workspace: nó chỉ được build trên
+# máy Mac có Xcode, không bao giờ trong CI hay trong image Docker. Để nó trong
+# workspace thì lockfile chung sẽ kéo theo @capacitor/ios + android, và hai
+# Dockerfile (chỉ copy package.json của server/web) sẽ hỏng vì lockfile lệch.
+# Cài riêng: cd apps/mobile && pnpm install

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Card, ErrorNote, Spinner } from '@/components/ui'
+import { isNative, registerForPush, rememberedToken, unregisterPush } from '@/lib/native'
 import { checkPushSupport, currentSubscription, subscribePush, unsubscribePush } from '@/lib/push'
 import { trpc } from '@/lib/trpc'
 
@@ -13,6 +14,9 @@ export default function NotifySettings() {
   const [pushBusy, setPushBusy] = useState(false)
   const [subscribed, setSubscribed] = useState<boolean | null>(null)
   const [testMsg, setTestMsg] = useState<string | null>(null)
+  const [nativeError, setNativeError] = useState<string | null>(null)
+  const [nativeBusy, setNativeBusy] = useState(false)
+  const [nativeToken, setNativeToken] = useState<string | null>(() => rememberedToken())
 
   const support = checkPushSupport()
   const refresh = () => { void utils.notify.status.invalidate(); void utils.notify.upcomingCount.invalidate() }
@@ -26,6 +30,8 @@ export default function NotifySettings() {
   const savePrefs = trpc.notify.updatePreferences.useMutation({ onSuccess: refresh })
   const subscribe = trpc.notify.subscribePush.useMutation({ onSuccess: () => { setSubscribed(true); refresh() } })
   const unsubscribe = trpc.notify.unsubscribePush.useMutation({ onSuccess: () => { setSubscribed(false); refresh() } })
+  const registerNative = trpc.notify.registerNative.useMutation({ onSuccess: refresh })
+  const unregisterNative = trpc.notify.unregisterNative.useMutation({ onSuccess: refresh })
   const sendTest = trpc.notify.sendTest.useMutation({
     onSuccess: (d) => setTestMsg(d.detail),
     onError: (e) => setTestMsg(`❌ ${e.message}`),
@@ -52,6 +58,28 @@ export default function NotifySettings() {
       setPushError((err as Error).message)
     } finally {
       setPushBusy(false)
+    }
+  }
+
+  async function toggleNative(on: boolean) {
+    setNativeError(null)
+    setNativeBusy(true)
+    try {
+      if (on) {
+        const reg = await registerForPush()
+        setNativeToken(reg.token)
+        await registerNative.mutateAsync(reg)
+      } else {
+        // Không biết token thì vẫn gỡ được ở máy; bản ghi phía server sẽ tự rụng
+        // ở lần gửi sau khi FCM báo token đã chết.
+        if (nativeToken) await unregisterNative.mutateAsync({ token: nativeToken })
+        await unregisterPush()
+        setNativeToken(null)
+      }
+    } catch (err) {
+      setNativeError((err as Error).message)
+    } finally {
+      setNativeBusy(false)
     }
   }
 
@@ -160,6 +188,64 @@ export default function NotifySettings() {
         )}
         {pushError && <ErrorNote message={pushError} />}
       </section>
+
+      {/* ---------- Push native (app điện thoại) ---------- */}
+      {(isNative() || s.nativeDevices > 0) && (
+        <>
+          <hr style={{ borderColor: 'var(--border)' }} />
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Dot on={s.nativeDevices > 0 && s.notifyNative} />
+              <span className="flex-1 text-sm font-semibold">Thông báo trên app điện thoại</span>
+              {s.nativeDevices > 0 && (
+                <Switch
+                  checked={s.notifyNative}
+                  onChange={(v) => savePrefs.mutate({ notifyNative: v })}
+                  label="Bật thông báo app điện thoại"
+                />
+              )}
+            </div>
+
+            {!s.serverNativeReady ? (
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {s.nativeConfigError ?? 'Server chưa cấu hình FCM_SERVICE_ACCOUNT.'}
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {isNative() && (
+                  <button
+                    className="btn btn-ghost !py-1.5 text-xs"
+                    onClick={() => void toggleNative(!nativeToken)}
+                    disabled={nativeBusy}
+                  >
+                    {nativeBusy ? 'Đang xử lý…' : nativeToken ? 'Tắt trên máy này' : 'Bật trên máy này'}
+                  </button>
+                )}
+                {s.nativeDevices > 0 && (
+                  <button
+                    className="btn btn-ghost !py-1.5 text-xs"
+                    onClick={() => { setTestMsg(null); sendTest.mutate({ channel: 'native' }) }}
+                    disabled={sendTest.isPending}
+                  >
+                    Gửi thử
+                  </button>
+                )}
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                  {s.nativeDevices} máy đã cài app
+                </span>
+              </div>
+            )}
+
+            {isNative() && (
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                App còn tự đặt lịch nhắc sẵn trên máy cho 3 ngày tới, nên vẫn kêu
+                đúng giờ khi mất mạng.
+              </p>
+            )}
+            {nativeError && <ErrorNote message={nativeError} />}
+          </section>
+        </>
+      )}
 
       {testMsg && (
         <p className="rounded-xl px-3 py-2 text-sm" style={{ background: 'var(--surface-2)' }}>{testMsg}</p>

@@ -1,0 +1,10 @@
+# Dự án native do `cap add` sinh ra — build lại được, không cần trong git.
+/ios/
+/android/
+
+# Bí mật của Firebase: không bao giờ đưa lên git.
+google-services.json
+GoogleService-Info.plist
+*.p8
+*.mobileprovision
+*.p12

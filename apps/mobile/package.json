@@ -1,0 +1,28 @@
+{
+  "name": "@fh/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vỏ Capacitor đóng gói PWA thành app iOS/Android (Phase 7)",
+  "scripts": {
+    "sync": "pnpm -C ../.. --filter @fh/web build && cap sync",
+    "add:ios": "cap add ios",
+    "add:android": "cap add android",
+    "open:ios": "cap open ios",
+    "open:android": "cap open android",
+    "run:ios": "cap run ios",
+    "run:android": "cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/push-notifications": "^8.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
 import { trpc } from '@/lib/trpc'
+import { useNativeBridge } from '@/lib/useNativeBridge'
 import Login from '@/pages/Login'
 import CalendarPage from '@/pages/Calendar'
 import Diary from '@/pages/Diary'
@@ -38,6 +39,9 @@ const TABS = [
 
 export default function App() {
   const me = trpc.auth.me.useQuery()
+  // Trong app điện thoại: đăng ký token push và gương lịch nhắc xuống máy.
+  // Ở trình duyệt thì hook này không làm gì.
+  useNativeBridge(Boolean(me.data))
 
   if (me.isLoading) {
     return <div className="flex min-h-dvh items-center justify-center"><Spinner /></div>

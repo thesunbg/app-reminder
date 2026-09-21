@@ -4,7 +4,7 @@ import { sendMessage, telegramEnabled } from '../lib/telegram.js'
 import { sendPushToUser, webPushEnabled } from '../lib/webpush.js'
 import { fcmEnabled, sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
-import { toTelegramHtml } from './messages.js'
+import { notificationUrl, toTelegramHtml } from './messages.js'
 
 const BATCH = 50
 const MAX_ATTEMPTS = 3
@@ -79,13 +79,7 @@ async function deliver(n: Notification): Promise<string[]> {
     }
   }
 
-  // bấm vào thông báo thì mở đúng màn hình liên quan
-  const url =
-    n.kind === 'DAILY_DIGEST' ? '/nhat-ky'
-    : n.refTable === 'note' ? '/ghi-chu'
-    : n.refTable === 'event' ? '/su-kien'
-    : n.refTable === 'homework' ? '/hoc-tap'
-    : '/'
+  const url = notificationUrl(n)
 
   // Kênh được tính LẠI ở đây chứ không dùng n.channels đã chốt lúc materialize:
   // thông báo được sinh trước 14 ngày, nên người dùng hoàn toàn có thể liên kết
