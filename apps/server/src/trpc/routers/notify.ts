@@ -143,24 +143,39 @@ export const notifyRouter = router({
    *
    * Lý do tồn tại: push chỉ tới khi máy có mạng và Apple/Google chịu chuyển.
    * Local notification thì hệ điều hành tự bắn đúng giờ kể cả máy bay chế độ.
-   * App đặt lịch cục bộ, push đến thì trùng nội dung — `tag`/`thread-id` gộp
-   * lại nên người dùng không thấy hai lần.
+   * App đặt lịch cục bộ, push đến thì trùng nội dung — cả hai dùng chung `tag`
+   * nên hệ điều hành gộp lại, người dùng không thấy hai lần.
+   *
+   * KHÔNG trả về DAILY_DIGEST: nội dung của nó (`body`) chỉ là chỗ giữ chỗ cho
+   * tới lúc dispatch tính lại — ngày chưa xảy ra thì chưa biết bạn làm được gì.
+   * Đặt lịch cục bộ cho nó nghĩa là tối nào cũng nhận một thông báo rỗng.
    */
   upcoming: protectedProcedure
     .input(z.object({ days: z.number().int().min(1).max(14).default(3) }).default({}))
     .query(async ({ ctx, input }) => {
       const until = new Date(Date.now() + input.days * 86_400_000)
       const rows = await db.notification.findMany({
-        where: { userId: ctx.user.id, status: 'PENDING', fireAt: { gte: new Date(), lte: until } },
+        where: {
+          userId: ctx.user.id,
+          status: 'PENDING',
+          fireAt: { gte: new Date(), lte: until },
+          kind: { not: 'DAILY_DIGEST' },
+        },
         orderBy: { fireAt: 'asc' },
         // iOS chỉ giữ 64 local notification đang chờ cho mỗi app; xin nhiều hơn
         // thì hệ điều hành lặng lẽ bỏ phần thừa, mà bỏ phần nào thì không nói.
         take: 60,
-        select: { id: true, kind: true, refTable: true, title: true, body: true, fireAt: true },
+        select: { id: true, kind: true, refTable: true, refId: true, title: true, body: true, fireAt: true },
       })
       // url tính bằng đúng hàm dispatch dùng cho push, để bấm vào local
-      // notification và bấm vào push mở cùng một màn hình.
-      return rows.map(({ refTable, ...r }) => ({ ...r, url: notificationUrl({ kind: r.kind, refTable }) }))
+      // notification và bấm vào push mở cùng một màn hình. `tag` cũng phải là
+      // refId y như dispatch gửi kèm push — khác một chữ là hệ điều hành coi
+      // chúng là hai thông báo và hiện cả hai.
+      return rows.map(({ refTable, refId, ...r }) => ({
+        ...r,
+        tag: refId,
+        url: notificationUrl({ kind: r.kind, refTable }),
+      }))
     }),
 
   updatePreferences: protectedProcedure

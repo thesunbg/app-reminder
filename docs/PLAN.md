@@ -36,7 +36,7 @@ Khuyến nghị chia 2 lớp:
 - **Lớp cưỡng chế (hard control)**: dùng sẵn **Apple Screen Time / Family Sharing** hoặc **Microsoft Family Safety** / **Google Family Link**. Miễn phí, chạy ở tầng OS, không gỡ được.
 - **Lớp theo dõi & đồng hành (app của bạn làm)**: thời khoá biểu, bài tập, tự đánh giá, điểm số, tiến độ, biểu đồ, phụ huynh xem dashboard. Đây mới là phần tạo giá trị và không trùng với OS.
 
-Phase 8 (tuỳ chọn) có thể làm 1 agent Tauri nhẹ chạy trên máy con, chỉ **đọc** app đang active + thời lượng rồi gửi về server — đủ để có báo cáo "hôm nay con dùng 3h YouTube", không cần chặn.
+Phase 8 (✅ đã làm) là một agent nhẹ chạy trên máy con, chỉ **đọc** app đang active + thời lượng rồi gửi về server — đủ để có báo cáo "hôm nay con dùng 3h YouTube", không cần chặn. Viết bằng Node chứ không phải Tauri; lý do ở mục 5.5.
 
 ---
 
@@ -87,7 +87,8 @@ Phase 8 (tuỳ chọn) có thể làm 1 agent Tauri nhẹ chạy trên máy con,
 ```
 family(id, name, timezone='Asia/Ho_Chi_Minh')
 user(id, family_id, name, role: PARENT|CHILD, birthday, telegram_chat_id)
-device(id, user_id, push_subscription, platform)
+push_device(id, user_id, endpoint, p256dh, auth, platform)   -- Web Push
+native_device(id, user_id, token, platform, model)           -- phase 7, FCM
 
 -- Nhóm 1: việc hàng ngày theo thời khoá biểu
 routine(id, family_id, owner_id, title, category, duration_min,
@@ -117,7 +118,10 @@ class_schedule(id, child_id, weekday, period, subject, room, teacher,
                start_time, end_time, effective_from, effective_to)
 study_record(id, child_id, subject, kind: HOMEWORK|EXAM|SCORE,
              title, score, max_score, date, note)
-screen_report(id, child_id, date, app, minutes)    -- phase 8
+-- phase 8: khoá unique gồm cả device_id, vì agent gửi TỔNG CẢ NGÀY chứ không
+-- gửi phần chênh; thiếu device_id thì hai máy của cùng một người đè số nhau
+agent_device(id, user_id, token_hash, name, platform, last_report_at)
+screen_report(id, user_id, device_id, date, app, category, minutes)
 
 -- Hạ tầng nhắc
 notification(id, user_id, kind, ref_table, ref_id,
@@ -147,10 +151,14 @@ Nguyên tắc: **mọi thứ cần nhắc đều đẻ ra dòng trong `notificat
 | ~~**4**~~ | ✅ Biểu đồ thống kê (streak, giờ học/tuần, tỉ lệ hoàn thành, heatmap) | xong | Nhìn thấy tiến bộ |
 | ~~**5**~~ | ✅ Tài khoản con, thời khoá biểu, điểm/bài tập (có nhắc), dashboard phụ huynh | xong | Theo dõi được con |
 | ~~**6**~~ | ❌ Bỏ (quyết định 20/09: không cần AI, chỉ nhắc theo lịch) | — | — |
-| **7** | Bọc Capacitor → app iOS/Android, push native, local notification. *Cần Xcode + Apple Developer ($99/năm) và Android SDK — máy dev hiện chưa có.* | 1 tuần | App thật trên điện thoại |
-| **8** | *(tuỳ chọn)* Agent desktop Tauri: báo cáo app usage, auto-diary từ máy | 1-2 tuần | Nhật ký tự động, báo cáo máy con |
+| ~~**7**~~ | ✅ Code xong: kênh push native (FCM HTTP v1), vỏ Capacitor, local notification dự phòng khi mất mạng. **Chưa build lần nào** — cần Xcode + Apple Developer ($99/năm) và Android SDK, máy dev hiện chưa có. | xong (code) | App thật trên điện thoại — sau khi build |
+| ~~**8**~~ | ✅ Agent máy tính báo cáo thời lượng dùng app + nhật ký tự động từ máy. Viết bằng **Node chứ không phải Tauri** — lý do ở mục 5.5. | xong | Nhật ký tự động, báo cáo máy con |
 
 **Tổng: ~9-10 tuần để có bản hoàn chỉnh; ~3 tuần đã có bản dùng thật hàng ngày.**
+
+**Trạng thái 21/09/2026: mọi phase đã code xong.** Việc còn lại không phải là
+viết code mà là *mua và cài*: một tài khoản Apple Developer, một máy Mac có
+Xcode, một project Firebase. Chi tiết ở [apps/mobile/README.md](../apps/mobile/README.md).
 
 Nguyên tắc: không làm UI đẹp trước phase 4. Làm đúng engine nhắc nhở trước — đó là phần khó và là lý do tồn tại của app.
 
@@ -178,12 +186,65 @@ Ví dụ: *"Nhắc tôi thay dầu xe ngày 15 tháng sau, trước 3 ngày báo
 ### 5.3 Nhật ký tự động
 Ba nguồn, tăng dần độ phức tạp:
 1. **Từ chính app** (phase 3, dễ): cuối ngày tự tổng hợp "đã hoàn thành: học tiếng Anh 60', học tiếng Trung 45'..." thành 1 entry nháp, bạn sửa/bổ sung.
-2. **Từ agent desktop** (phase 8): app nào active bao lâu → gom nhóm thành "làm việc 4h, giải trí 1h".
+2. **Từ agent desktop** (phase 8, ✅ đã làm): app nào active bao lâu → gom nhóm thành "làm việc 4h, giải trí 1h". Lưu thành `DiaryEntry` nguồn `AUTO_DEVICE`, sống song song với bản `AUTO_TASK` và bản viết tay.
 3. **Từ nguồn ngoài** (sau): Git commit, Google Calendar, Health app — chỉ làm nếu thực sự cần.
 
 ### 5.4 Quyền trong gia đình
 - Phụ huynh: xem/sửa mọi thứ của con, nhận báo cáo tuần.
 - Con: chỉ thấy dữ liệu của mình + việc chung của gia đình; nhật ký của con nên có chế độ **riêng tư** (phụ huynh thấy có entry và độ dài, không thấy nội dung) — sẽ giúp con thực sự viết thay vì viết cho bố mẹ đọc. Đây là quyết định về giá trị nuôi dạy, bạn cân nhắc.
+
+### 5.5 Agent máy tính: vì sao là Node chứ không phải Tauri
+
+Kế hoạch ban đầu ghi "agent Tauri nhẹ". Khi bắt tay làm thì đổi sang một script
+Node **không có dependency nào**. Lý do:
+
+- Tauri kéo theo Rust toolchain trên máy build, và trên macOS còn phải ký +
+  notarize thì máy mới chịu chạy. Rất nhiều công cho một tiến trình không có
+  giao diện.
+- Phần việc thật sự chỉ là: gọi vài lệnh sẵn có của hệ điều hành
+  (`osascript`, PowerShell, `xprop`), cộng số, `fetch` một cái. Không có chỗ
+  nào cần tới Rust.
+- Node đã có trên máy dev. Cài agent lên máy con chỉ là chép thư mục.
+
+Đổi lại: không có icon ở khay hệ thống. Nếu sau này cần giao diện (nút tạm
+dừng cho con chẳng hạn) thì `tracker.js` và `sampler.js` là phần khó, và chúng
+độc lập với cách đóng gói — bọc lại bằng Tauri vẫn dùng được nguyên.
+
+**Giao kèo dữ liệu quan trọng nhất**: agent gửi **tổng cộng dồn của cả ngày**,
+không gửi phần chênh lệch. Nhờ vậy gửi lại bao nhiêu lần cũng ra cùng kết quả —
+mất mạng rồi gửi bù, hay agent bị kill giữa chừng, đều không làm số cộng đôi.
+Hệ quả: agent **phải** ghi trạng thái ra đĩa, nếu không lần khởi động lại giữa
+ngày sẽ gửi một báo cáo thiếu và xoá mất phần đầu ngày trên server.
+
+Ranh giới vẫn giữ nguyên như mục 1: agent chỉ **đọc và báo cáo** tên app + số
+phút. Không chặn, không giới hạn, không chụp màn hình, không đọc nội dung cửa
+sổ. Chặn giao cho Screen Time / Family Link.
+
+### 5.6 Nhắc nhở trong app điện thoại: hai đường chồng nhau
+
+Phase 7 không thay Telegram mà thêm hai đường nữa, cố ý trùng nhau:
+
+| | Push (FCM) | Local notification |
+|---|---|---|
+| Ai bắn | Server | Hệ điều hành trên máy |
+| Cần mạng lúc bắn | Có | Không |
+| Nội dung | Tính lại lúc gửi (vd tổng kết cuối ngày) | Chốt lúc đặt lịch |
+| Đến được khi app bị kill | Tuỳ Apple/Google | Có |
+
+App xin trước 3 ngày lịch nhắc qua `notify.upcoming` rồi tự đặt trên máy. Trùng
+nội dung thì hệ điều hành gộp lại theo `thread-id`/`group`, người dùng thấy một
+dòng — khoá gộp phải là `refId`, đúng giá trị server gửi kèm push. **iOS chỉ
+giữ 64 local notification đang chờ cho mỗi app**, xin nhiều hơn thì phần thừa
+bị bỏ im lặng — vì vậy `notify.upcoming` chặn ở 60.
+
+Tổng kết cuối ngày là ngoại lệ: nó **không** được đặt lịch cục bộ, vì nội dung
+chỉ tính được lúc gửi. Đặt trước thì tối nào cũng nhận một thông báo rỗng.
+
+Vỏ Capacitor nạp thẳng site thật (`server.url`) chứ không gói bản build vào máy.
+Session dùng cookie: webview chạy ở `capacitor://localhost` mà gọi API sang
+domain thật thì đó là cookie bên thứ ba và Safari iOS chặn thẳng. Giữ nguyên
+origin thì cookie và passkey chạy y như trên trình duyệt, và sửa giao diện
+không phải build lại app. Chi tiết trong `apps/mobile/capacitor.config.ts`.
 
 ---
 
@@ -197,6 +258,9 @@ Ba nguồn, tăng dần độ phức tạp:
 | Làm quá nhiều tính năng rồi bỏ dở | Bám phase 1 → dùng thật → mới làm tiếp |
 | Con thấy bị giám sát, phản ứng | Minh bạch: nói rõ app ghi nhận gì; giữ nhật ký con riêng tư |
 | Mất dữ liệu | `pg_dump` hằng đêm lên object storage, kiểm tra restore 1 lần/tháng |
+| Phase 7 chưa từng build thật | Phần server (FCM) có test; phần app chỉ chạy được sau khi có Xcode + Apple Developer. Đừng coi là "xong" cho tới khi bấm **Gửi thử** trên máy thật. |
+| Agent chạy mà không ai biết nó im | `lastReportAt` hiện ở màn hình Máy tính — quá một ngày không có báo cáo nghĩa là agent chết hoặc mất quyền Accessibility |
+| macOS không cấp quyền Accessibility | Agent vẫn chạy nhưng mọi mẫu đều rỗng và **không báo lỗi gì**. Kiểm tra bằng cách nhìn báo cáo sau 10 phút đầu. |
 
 ---
 

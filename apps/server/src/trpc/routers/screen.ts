@@ -11,11 +11,18 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { db } from '../../db.js'
-import { addDays, vnToday } from '../../lib/time.js'
+import { addDays, diffDays, vnToday } from '../../lib/time.js'
 import { buildScreenSummary, hashAgentToken, newAgentToken } from '../../screen/report.js'
 import { protectedProcedure, router } from '../trpc.js'
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+/**
+ * Regex chỉ nói "đúng hình dạng", không nói "hợp lý". `from: '0001-01-01'` vẫn
+ * lọt, và `dateRange` sẽ dựng bảy trăm nghìn phần tử — treo cả tiến trình.
+ * Một năm đã dài hơn mọi câu hỏi thật sự ai đó đặt ra ở màn hình này.
+ */
+const MAX_RANGE_DAYS = 366
 
 /** Ai được xem/sửa máy của `targetId`? */
 async function assertAccess(
@@ -96,6 +103,10 @@ export const screenRouter = router({
       await assertAccess(ctx.user, userId)
       const to = input.to ?? vnToday()
       const from = input.from ?? addDays(to, -13)
+      const span = diffDays(from, to)
+      if (span < 0 || span > MAX_RANGE_DAYS) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Khoảng xem tối đa ${MAX_RANGE_DAYS} ngày` })
+      }
       return buildScreenSummary(userId, from, to)
     }),
 })

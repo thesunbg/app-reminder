@@ -11,6 +11,8 @@ import { generateKeyPairSync, createVerify } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import { after, before, beforeEach, describe, it } from 'node:test'
 import { db } from '../src/db.js'
+import { plannedChannels } from '../src/notifications/channels.js'
+import { telegramEnabled } from '../src/lib/telegram.js'
 import {
   __setNativeSender, __setServiceAccount, accessToken, fcmConfigError, fcmEnabled,
   sendNativeToUser, type SendOutcome,
@@ -212,5 +214,39 @@ describe('service account JWT', () => {
     assert.equal(fcmEnabled(), false)
     assert.equal(fcmConfigError(), null)
     back()
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('kênh dự kiến lúc sinh lịch', () => {
+  const prefs = (over = {}) => ({
+    notifyTelegram: true, notifyWebPush: true, notifyNative: true,
+    telegramChatId: null, ...over,
+  })
+
+  it('không có chatId thì không xếp Telegram, dù người dùng đã bật', () => {
+    assert.equal(plannedChannels(prefs()).includes('telegram'), false)
+    // Môi trường test không đặt TELEGRAM_BOT_TOKEN, nên kể cả có chatId thì
+    // kênh vẫn tắt — đúng như dispatch sẽ xử sự.
+    assert.equal(telegramEnabled(), false)
+    assert.equal(plannedChannels(prefs({ telegramChatId: '123' })).includes('telegram'), false)
+  })
+
+  it('tắt hết kênh thì mảng RỖNG — chốt chặn "không sinh thông báo" phải còn tác dụng', () => {
+    // notifyNative mặc định bật cho mọi người; nếu không xét fcmEnabled() thì
+    // mảng không bao giờ rỗng và người đã tắt hết kênh vẫn bị đẻ ra 14 ngày
+    // nhắc, để rồi mọi cái đều FAILED lúc gửi.
+    assert.deepEqual(
+      plannedChannels(prefs({ notifyTelegram: false, notifyWebPush: false, notifyNative: false })),
+      [],
+    )
+  })
+
+  it('server chưa cấu hình FCM thì không xếp kênh native', () => {
+    const back = __setServiceAccount('')
+    assert.equal(plannedChannels(prefs()).includes('native'), false)
+    back()
+    assert.equal(plannedChannels(prefs()).includes('native'), true)
   })
 })

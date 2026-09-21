@@ -14,6 +14,7 @@
  * Trùng nhau thì sao? Hai bên dùng chung `tag`/`thread-id` theo id thông báo
  * nên hệ điều hành gộp lại, người dùng thấy một dòng.
  */
+import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { Device } from '@capacitor/device'
 import { LocalNotifications } from '@capacitor/local-notifications'
@@ -104,12 +105,17 @@ export async function registerForPush(timeoutMs = 15_000): Promise<NativeRegistr
   })
 
   remember(token)
-  const info = await Device.getInfo().catch(() => null)
+  const [info, app] = await Promise.all([
+    Device.getInfo().catch(() => null),
+    // Phiên bản CỦA APP, không phải của hệ điều hành. Device.getInfo() chỉ có
+    // osVersion — nhét nó vào đây thì cột appVersion nói dối.
+    App.getInfo().catch(() => null),
+  ])
   return {
     token,
     platform: nativePlatform(),
     model: info ? `${info.manufacturer ?? ''} ${info.model}`.trim().slice(0, 80) : undefined,
-    appVersion: info?.osVersion?.slice(0, 40),
+    appVersion: app ? `${app.version} (${app.build})`.slice(0, 40) : undefined,
   }
 }
 
@@ -117,13 +123,24 @@ export async function registerForPush(timeoutMs = 15_000): Promise<NativeRegistr
 export async function unregisterPush(): Promise<void> {
   remember(null)
   if (!isNative()) return
-  await PushNotifications.removeAllListeners().catch(() => {})
+  // KHÔNG gọi removeAllListeners(): nó gỡ cả handler
+  // `pushNotificationActionPerformed` mà useNativeBridge đã đăng ký, và
+  // handler đó không được đăng ký lại cho tới lần mở app sau — bấm vào thông
+  // báo sẽ hết mở đúng màn hình. registerForPush đã tự dọn listener của nó.
   await PushNotifications.unregister().catch(() => {})
 }
 
 // ------------------------------------------------------- local notifications
 
-export type UpcomingItem = { id: string; title: string; body: string; url: string; fireAt: Date }
+export type UpcomingItem = {
+  id: string
+  /** Khoá gộp; phải đúng giá trị server gửi kèm push, xem notify.upcoming. */
+  tag: string
+  title: string
+  body: string
+  url: string
+  fireAt: Date
+}
 
 /**
  * Local notification cần id dạng **số 32-bit**, còn thông báo của server là
@@ -174,9 +191,11 @@ export async function syncLocalNotifications(items: UpcomingItem[]): Promise<num
       title: i.title,
       body: i.body,
       schedule: { at: i.fireAt, allowWhileIdle: true },
-      // gộp với push cùng nội dung thay vì hiện hai lần
-      group: i.id,
-      threadIdentifier: i.id,
+      // Gộp với push cùng nội dung thay vì hiện hai lần. Phải là `tag` (refId
+      // của server) chứ không phải id bản ghi: push mang theo đúng refId, khác
+      // một chữ là hệ điều hành coi đây là hai thông báo rời.
+      group: i.tag,
+      threadIdentifier: i.tag,
       extra: { notificationId: i.id, url: i.url },
     })),
   })

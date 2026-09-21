@@ -24,17 +24,28 @@ export async function buildDeviceSummary(userId: string, date: string): Promise<
     select: { app: true, category: true, minutes: true },
   })
 
+  // Gộp theo app TRƯỚC: mỗi máy là một dòng riêng trong DB, nên người dùng hai
+  // máy sẽ thấy "Chrome, Chrome" trong cùng một câu. Ngưỡng MIN_MINUTES cũng
+  // phải xét trên tổng — 4 phút ở laptop cộng 4 phút ở máy bàn là 8 phút thật.
+  const byApp = new Map<string, { category: Category; minutes: number }>()
+  for (const r of rows) {
+    const prev = byApp.get(r.app)
+    byApp.set(r.app, {
+      category: (r.category as Category) ?? 'other',
+      minutes: (prev?.minutes ?? 0) + r.minutes,
+    })
+  }
+
   const byCategory = new Map<Category, { minutes: number; apps: Array<{ app: string; minutes: number }> }>()
   let totalMinutes = 0
 
-  for (const r of rows) {
-    if (r.minutes < MIN_MINUTES) continue
-    totalMinutes += r.minutes
-    const cat = r.category as Category
-    const bucket = byCategory.get(cat) ?? { minutes: 0, apps: [] }
-    bucket.minutes += r.minutes
-    bucket.apps.push({ app: r.app, minutes: r.minutes })
-    byCategory.set(cat, bucket)
+  for (const [app, v] of byApp) {
+    if (v.minutes < MIN_MINUTES) continue
+    totalMinutes += v.minutes
+    const bucket = byCategory.get(v.category) ?? { minutes: 0, apps: [] }
+    bucket.minutes += v.minutes
+    bucket.apps.push({ app, minutes: v.minutes })
+    byCategory.set(v.category, bucket)
   }
 
   if (totalMinutes === 0) return { date, text: '', totalMinutes: 0, empty: true }

@@ -134,8 +134,14 @@ export type SendOutcome = { ok: true } | { ok: false; dead: boolean; message: st
 
 export type NativeSender = (token: string, payload: NativePayload) => Promise<SendOutcome>
 
-/** FCM báo token chết bằng các mã này; mọi mã khác coi là lỗi tạm thời. */
-const DEAD_STATUSES = new Set(['UNREGISTERED', 'INVALID_ARGUMENT', 'NOT_FOUND', 'SENDER_ID_MISMATCH'])
+/**
+ * FCM báo token chết bằng các mã này; mọi mã khác coi là lỗi tạm thời.
+ *
+ * Cố ý KHÔNG có `INVALID_ARGUMENT`: FCM trả mã đó cho cả payload sai định dạng
+ * (vd tiêu đề quá dài) chứ không riêng token hỏng. Xếp nó vào đây thì một
+ * thông báo lỗi sẽ xoá sạch thiết bị của người đó.
+ */
+const DEAD_STATUSES = new Set(['UNREGISTERED', 'NOT_FOUND', 'SENDER_ID_MISMATCH'])
 
 const realSender: NativeSender = async (token, payload) => {
   const token_ = await accessToken()

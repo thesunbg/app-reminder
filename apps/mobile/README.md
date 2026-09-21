@@ -98,8 +98,13 @@ Hai đường song song, cố ý chồng nhau:
   bị kill.
 
 Trùng nội dung thì hệ điều hành gộp lại theo `thread-id`/`group` — người dùng
-thấy một dòng. Đăng xuất thì lịch cục bộ bị xoá sạch, để máy không nhắc việc
-của người vừa đăng xuất.
+thấy một dòng. Khoá gộp là `refId` của thông báo, đúng giá trị server gửi kèm
+push; lệch một chữ là hệ điều hành coi đây là hai thông báo rời và hiện cả hai.
+Đăng xuất thì lịch cục bộ bị xoá sạch, để máy không nhắc việc của người vừa
+đăng xuất.
+
+Tổng kết cuối ngày **không** được đặt lịch cục bộ: nội dung của nó chỉ có lúc
+gửi (ngày chưa xảy ra thì chưa biết bạn làm được gì), nên bản cục bộ sẽ rỗng.
 
 Giới hạn cần nhớ: **iOS chỉ giữ 64 local notification đang chờ cho mỗi app**,
 xin nhiều hơn thì phần thừa bị bỏ im lặng. Vì vậy `notify.upcoming` chặn ở 60.

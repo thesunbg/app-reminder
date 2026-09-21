@@ -16,7 +16,8 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 4 | Biểu đồ nâng cao (heatmap, theo tuần/nhóm, theo thứ, lọc thành viên) | ✅ xong |
 | 5 | Học tập: thời khoá biểu, bài tập (nhắc 19:00 hôm trước + 07:00), điểm, dashboard phụ huynh | ✅ xong |
 | 6 | Nhập bằng giọng nói + LLM | ❌ bỏ — chủ nhà quyết định không cần AI, chỉ cần nhắc theo lịch |
-| 7 | Đóng gói Capacitor (iOS/Android) | ⬜ |
+| 7 | Push native (FCM) + vỏ Capacitor + local notification | ✅ code xong, **chưa build app lần nào** |
+| 8 | Agent máy tính: thời lượng dùng app, nhật ký tự động từ máy | ✅ xong |
 
 Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ngày) / 60 ngày
 (giỗ, sinh nhật), gửi qua Telegram và/hoặc Web Push, tự huỷ khi bạn đã tick
@@ -28,6 +29,27 @@ gửi** thay vì lúc sinh lịch — ngày chưa xảy ra thì chưa biết b�
 
 Nhắc sự kiện chỉ gửi cho thành viên **phụ huynh** — giỗ chạp và sinh nhật là
 việc người lớn chuẩn bị, không cần dựng con dậy lúc 8h sáng.
+
+Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
+native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
+vẫn chạy. Kênh được tính lại lúc gửi chứ không chốt lúc sinh lịch — xem phần
+Quy ước bên dưới.
+
+**App điện thoại (phase 7)** — vỏ Capacitor ở [apps/mobile](apps/mobile/README.md).
+Code đã xong và kênh FCM có test, nhưng **chưa build lần nào**: cần máy Mac có
+Xcode, Android SDK, và tài khoản Apple Developer (99 USD/năm) để cài lên iPhone
+lâu dài. Trong app, nhắc nhở đi hai đường chồng nhau: push từ server (nội dung
+mới, cần mạng) và local notification app tự đặt trước 3 ngày (đúng giờ kể cả
+mất mạng). Trùng thì hệ điều hành gộp lại.
+
+**Agent máy tính (phase 8)** — [apps/agent](apps/agent/README.md). Tiến trình
+nền không có dependency nào, đọc tên app đang dùng và số phút rồi gửi về server.
+Kết quả ở **Học tập → Máy tính** và thành một dòng trong nhật ký. Nó chỉ **đọc
+và báo cáo** — không chặn, không chụp màn hình, không đọc nội dung cửa sổ. Chặn
+và giới hạn giờ giao cho Screen Time / Family Link ở tầng hệ điều hành.
+
+> Con thấy đúng những gì bố mẹ thấy về máy mình, và tự gỡ máy được bất cứ lúc
+> nào. Hãy nói với con là máy có cài — lý do ở `docs/PLAN.md` mục 1.
 
 Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 - **2 bước**: TOTP chuẩn RFC 6238, tự viết ([lib/totp.ts](apps/server/src/lib/totp.ts)),
@@ -48,6 +70,10 @@ Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 > nhưng service worker bị chặn trong môi trường sandbox lúc phát triển. Hãy thử
 > nút “Gửi thử” trong Cài đặt trên máy/điện thoại của bạn trước khi tin vào nó.
 > Telegram thì đã được kiểm chứng bằng test với Bot API giả.
+>
+> **Push native (FCM) cũng vậy.** Test dùng service account sinh tại chỗ và
+> verify chữ ký RS256, nhưng chưa có request nào đi tới Google thật. Đừng coi
+> phase 7 là xong cho tới khi bấm “Gửi thử” trên điện thoại thật.
 
 ## Yêu cầu
 
@@ -101,17 +127,29 @@ hiện màn hình khởi tạo gia đình.
 
 ```
 apps/server/        Fastify + tRPC + Prisma
-  prisma/schema.prisma   toàn bộ model (đã định nghĩa sẵn cho phase 1–5)
+  prisma/schema.prisma   toàn bộ model
   src/lib/               time (múi giờ VN), recurrence (RRULE), session, password
   src/lib/lunar.ts       âm lịch VN (Hồ Ngọc Đức, UTC+7)
-  src/notifications/     engine nhắc: materialize, dispatch, events, scheduler
-  src/diary/             nhật ký tự động + tổng kết cuối ngày
-  src/trpc/routers/      auth, family, routine, event, note, diary, notify, stats
+  src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
+  src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
+  src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler
+  src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
+  src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
+  src/trpc/routers/      auth, family, routine, event, note, diary, notify,
+                         stats, study, screen
 apps/web/           React 19 + Vite + Tailwind 4 + PWA
-  src/pages/             Today, Week, Diary, Notes, Events, Stats, Routines, Settings, Login
+  src/pages/             Today, Week, Diary, Notes, Events, Calendar, Stats,
+                         Study, Routines, Settings, Login
+  src/lib/native.ts      cầu nối Capacitor: push token + local notification
+apps/mobile/        vỏ Capacitor (iOS/Android) — ngoài pnpm workspace
+apps/agent/         agent máy tính, không dependency — ngoài pnpm workspace
 deploy/             docker-compose + Caddy + backup cho VPS
 docs/PLAN.md        kế hoạch và các quyết định kiến trúc
 ```
+
+`apps/mobile` và `apps/agent` **cố ý đứng ngoài pnpm workspace**: một cái chỉ
+build trên Mac có Xcode, cái kia không cần cài gì. Để chúng trong workspace thì
+hai Dockerfile (chỉ copy `package.json` của server/web) sẽ hỏng vì lockfile lệch.
 
 ## Quy ước quan trọng
 
@@ -123,8 +161,9 @@ Dùng helper trong `apps/server/src/lib/time.ts`, đừng tự viết lại.
 **Lặp lại.** Dùng RRULE (RFC 5545) qua `rrule.js`. Ngày được neo ở UTC-midnight
 như "floating date" để thứ trong tuần luôn khớp lịch VN.
 
-**Âm lịch.** Chưa làm. Khi làm, **phải** dùng thuật toán Hồ Ngọc Đức (UTC+7).
-Thư viện lịch Trung Quốc dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
+**Âm lịch.** Đã làm ở [lib/lunar.ts](apps/server/src/lib/lunar.ts) bằng thuật
+toán Hồ Ngọc Đức (UTC+7). **Đừng thay bằng thư viện lịch Trung Quốc**: chúng
+dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
 
 **Phân quyền.** Con chỉ thấy dữ liệu của mình; phụ huynh thấy cả nhà.
 Nhật ký của con mặc định riêng tư — xem lý do ở `docs/PLAN.md` mục 5.4.
@@ -159,6 +198,22 @@ BullMQ/Redis — xem `apps/server/src/notifications/scheduler.ts` để biết l
 Thông báo sinh trước 14 ngày, người dùng hoàn toàn có thể liên kết Telegram
 sau đó; tin vào giá trị cũ thì họ mất nhắc suốt hai tuần.
 
+Thêm một kênh nhắc thì sửa **một chỗ**:
+[notifications/channels.ts](apps/server/src/notifications/channels.ts). Trước
+đây phép tính này nằm rải rác ở sáu file materialize, quên một chỗ là im lặng
+mất nhắc.
+
+**Báo cáo từ agent là "tổng cả ngày", không phải phần chênh lệch.** Agent gửi
+tổng cộng dồn nên gửi lại bao nhiêu lần cũng ra cùng kết quả — mất mạng gửi bù
+hay agent khởi động lại đều không làm số cộng đôi. Hệ quả bắt buộc: agent phải
+ghi trạng thái ra đĩa, nếu không lần bật lại giữa ngày sẽ **xoá** phần đầu ngày
+trên server. Khoá unique có cả `deviceId` để hai máy của cùng một người không
+đè số nhau.
+
+**Phân loại app ở server, không ở agent.** Sửa
+[lib/appCategory.ts](apps/server/src/lib/appCategory.ts) là cả nhà đổi theo, và
+`recategorize()` tính lại được dữ liệu cũ vì tên app thô vẫn được giữ nguyên.
+
 ## Lệnh hay dùng
 
 ```bash
@@ -169,7 +224,7 @@ pnpm typecheck        # kiểm tra kiểu toàn repo
 pnpm build            # build production
 pnpm db:studio        # Prisma Studio để xem/sửa dữ liệu
 pnpm db:migrate       # tạo migration mới sau khi sửa schema
-pnpm test             # chạy test (112 test, dùng database riêng family_hub_test)
+pnpm test             # test server (179, database riêng family_hub_test) + agent (12)
 ```
 
 Test chạy trên `family_hub_test`, **không dùng chung DB dev** — dev server có

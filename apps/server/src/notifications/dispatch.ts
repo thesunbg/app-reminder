@@ -1,9 +1,10 @@
 import type { Notification } from '@prisma/client'
 import { db } from '../db.js'
-import { sendMessage, telegramEnabled } from '../lib/telegram.js'
-import { sendPushToUser, webPushEnabled } from '../lib/webpush.js'
-import { fcmEnabled, sendNativeToUser } from '../lib/fcm.js'
+import { sendMessage } from '../lib/telegram.js'
+import { sendPushToUser } from '../lib/webpush.js'
+import { sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
+import { plannedChannels } from './channels.js'
 import { notificationUrl, toTelegramHtml } from './messages.js'
 
 const BATCH = 50
@@ -84,10 +85,7 @@ async function deliver(n: Notification): Promise<string[]> {
   // Kênh được tính LẠI ở đây chứ không dùng n.channels đã chốt lúc materialize:
   // thông báo được sinh trước 14 ngày, nên người dùng hoàn toàn có thể liên kết
   // Telegram sau đó. Tin vào giá trị cũ thì họ sẽ không nhận được gì suốt 2 tuần.
-  const wanted: string[] = []
-  if (user.notifyTelegram && telegramEnabled() && user.telegramChatId) wanted.push('telegram')
-  if (user.notifyWebPush && webPushEnabled()) wanted.push('webpush')
-  if (user.notifyNative && fcmEnabled()) wanted.push('native')
+  const wanted = plannedChannels(user)
   if (wanted.length === 0) throw new Error('người dùng chưa bật kênh nhắc nào')
 
   const sent: string[] = []

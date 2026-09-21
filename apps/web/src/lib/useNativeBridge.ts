@@ -48,7 +48,9 @@ export function useNativeBridge(enabled: boolean) {
   useEffect(() => {
     if (!enabled || !isNative() || !upcoming.data) return
     void syncLocalNotifications(
-      upcoming.data.map((n) => ({ id: n.id, title: n.title, body: n.body, url: n.url, fireAt: n.fireAt })),
+      upcoming.data.map((n) => ({
+        id: n.id, tag: n.tag, title: n.title, body: n.body, url: n.url, fireAt: n.fireAt,
+      })),
     )
   }, [enabled, upcoming.data])
 

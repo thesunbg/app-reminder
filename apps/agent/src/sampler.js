@@ -55,19 +55,26 @@ public class FhProbe {
   [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
   [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
   [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+  // TickCount64 chứ không phải TickCount: TickCount là int có dấu và lật dấu
+  // sau ~24,9 ngày máy chạy liên tục. Lúc đó idle thành âm rất lớn, agent coi
+  // như người dùng luôn ngồi máy và đếm 24/24.
+  // dwTime vẫn là bộ đếm 32 bit, nên phải so trên cùng một vòng 2^32.
   public static int IdleSeconds() {
     LASTINPUTINFO lii = new LASTINPUTINFO();
     lii.cbSize = (uint)Marshal.SizeOf(lii);
     if (!GetLastInputInfo(ref lii)) return 0;
-    return (int)((Environment.TickCount - (long)lii.dwTime) / 1000);
+    uint now = (uint)(Environment.TickCount64 & 0xFFFFFFFF);
+    uint ms = unchecked(now - lii.dwTime);
+    return (int)(ms / 1000);
   }
 }
 "@
 $pid_ = 0
 [void][FhProbe]::GetWindowThreadProcessId([FhProbe]::GetForegroundWindow(), [ref]$pid_)
 $p = Get-Process -Id $pid_ -ErrorAction SilentlyContinue
-$name = if ($p.MainWindowTitle) { $p.ProcessName } else { $p.ProcessName }
-Write-Output ("{0}|{1}" -f $name, [FhProbe]::IdleSeconds())
+# Tiến trình vừa thoát thì $p là null -> tên rỗng -> phía Node coi là "không
+# biết" và bỏ qua mẫu, đúng ý.
+Write-Output ("{0}|{1}" -f $p.ProcessName, [FhProbe]::IdleSeconds())
 `
 
 async function winSample() {

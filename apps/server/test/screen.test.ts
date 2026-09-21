@@ -245,6 +245,20 @@ describe('nhật ký tự động từ máy tính', () => {
     assert.match(s.text, /Giải trí/)
   })
 
+  it('cộng theo app trước khi cắt ngưỡng — hai máy không kể tên app hai lần', async () => {
+    const second = await db.agentDevice.create({
+      data: { userId: childId, name: 'Máy bàn', tokenHash: hashAgentToken(newAgentToken()) },
+    })
+    // 4 phút mỗi máy: dưới ngưỡng nếu xét riêng, nhưng 8 phút thật thì phải tính
+    await ingestReport(deviceId, childId, TODAY, [{ app: 'Chrome', minutes: 4 }])
+    await ingestReport(second.id, childId, TODAY, [{ app: 'Chrome', minutes: 4 }])
+
+    const s = await buildDeviceSummary(childId, TODAY)
+
+    assert.equal(s.totalMinutes, 8)
+    assert.equal(s.text.match(/Chrome/g)?.length, 1, 'chỉ kể tên Chrome một lần')
+  })
+
   it('bỏ qua app chỉ bật vài phút', async () => {
     await ingestReport(deviceId, childId, TODAY, [
       { app: 'YouTube', minutes: 60 },

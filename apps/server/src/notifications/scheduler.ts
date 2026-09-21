@@ -7,6 +7,7 @@ import { materializeNotes } from './notes.js'
 import { pollTelegramOnce } from './telegram-poller.js'
 import { telegramEnabled, getMe } from '../lib/telegram.js'
 import { webPushEnabled } from '../lib/webpush.js'
+import { fcmConfigError, fcmEnabled } from '../lib/fcm.js'
 
 const DISPATCH_EVERY_MS = 30_000
 const MATERIALIZE_EVERY_MS = 15 * 60_000
@@ -79,9 +80,15 @@ export function startScheduler(log: { info: (o: unknown, m?: string) => void; er
     })()
   }
 
+  // Cấu hình FCM hỏng thì nói ngay lúc khởi động, đừng để tới lúc có việc cần
+  // nhắc mới phát hiện — lúc đó lỗi chỉ hiện trong nhật ký thông báo.
+  const fcmError = fcmConfigError()
+  if (fcmError) log.error({ err: fcmError }, 'FCM_SERVICE_ACCOUNT không dùng được')
+
+  const anyChannel = telegramEnabled() || webPushEnabled() || fcmEnabled()
   log.info(
-    { telegram: telegramEnabled(), webpush: webPushEnabled() },
-    telegramEnabled() || webPushEnabled()
+    { telegram: telegramEnabled(), webpush: webPushEnabled(), native: fcmEnabled() },
+    anyChannel
       ? 'scheduler đã chạy'
       : 'scheduler đã chạy nhưng CHƯA có kênh gửi nào được cấu hình',
   )

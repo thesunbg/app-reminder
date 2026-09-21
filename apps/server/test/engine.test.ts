@@ -68,8 +68,10 @@ describe('materialize', () => {
     assert.equal(rows[0]!.fireAt.getTime(), due.getTime() - 10 * 60_000)
     assert.equal(rows[1]!.fireAt.getTime(), due.getTime())
     assert.equal(rows[2]!.fireAt.getTime(), due.getTime() + 30 * 60_000)
-    // kênh lúc sinh lịch chỉ là dự kiến; dispatch tính lại lúc gửi
-    assert.deepEqual(rows[1]!.channels, ['telegram', 'native'])
+    // Kênh lúc sinh lịch chỉ là dự kiến; dispatch tính lại lúc gửi. Ở môi
+    // trường test không có TELEGRAM_BOT_TOKEN nên Telegram không được xếp vào,
+    // dù user này đã liên kết chat — đúng như dispatch sẽ xử sự.
+    assert.deepEqual(rows[1]!.channels, ['native'])
 
     await db.routine.delete({ where: { id: r.id } })
   })

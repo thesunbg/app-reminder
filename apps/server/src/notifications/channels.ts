@@ -4,6 +4,9 @@
  * Trước đây phép tính này nằm rải rác ở sáu file materialize; thêm một kênh
  * là phải sửa đủ sáu chỗ và quên một chỗ thì im lặng mất nhắc. Giờ gom lại đây.
  */
+import { fcmEnabled } from '../lib/fcm.js'
+import { telegramEnabled } from '../lib/telegram.js'
+import { webPushEnabled } from '../lib/webpush.js'
 
 /** Phần thông tin tối thiểu cần để tính kênh — đủ cho cả `select` lẫn bản ghi đầy đủ. */
 export type ChannelPrefs = {
@@ -31,8 +34,11 @@ export const channelSelect = {
  */
 export function plannedChannels(u: ChannelPrefs): string[] {
   const channels: string[] = []
-  if (u.notifyTelegram && u.telegramChatId) channels.push('telegram')
-  if (u.notifyWebPush) channels.push('webpush')
-  if (u.notifyNative) channels.push('native')
+  if (u.notifyTelegram && telegramEnabled() && u.telegramChatId) channels.push('telegram')
+  if (u.notifyWebPush && webPushEnabled()) channels.push('webpush')
+  // Phải xét cả `fcmEnabled()`: notifyNative mặc định bật cho MỌI người, nên
+  // thiếu nó thì mảng không bao giờ rỗng, chốt chặn "tắt hết kênh" thành vô
+  // dụng, và server chưa cấu hình FCM vẫn đẻ ra 14 ngày nhắc để rồi hỏng hết.
+  if (u.notifyNative && fcmEnabled()) channels.push('native')
   return channels
 }
