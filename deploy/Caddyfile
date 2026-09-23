@@ -16,6 +16,12 @@
 	handle /export {
 		reverse_proxy server:3001
 	}
+	# Agent máy tính (phase 8). Thiếu khối này thì /agent/* rơi xuống nhánh SPA
+	# bên dưới và trả về index.html kèm mã 200 — agent nhận HTML thay vì JSON và
+	# hỏng im lặng. Thêm route REST mới ở server thì PHẢI thêm một handle ở đây.
+	handle /agent/* {
+		reverse_proxy server:3001
+	}
 
 	# PWA tĩnh — SPA fallback về index.html
 	handle {

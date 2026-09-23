@@ -249,8 +249,13 @@ Production: **https://reminder.nguyenvando.com**
 - PR nào cũng chạy test — kể cả PR tạo từ Claude trên điện thoại.
 - `202.92.6.143` chỉ chạy nginx + certbot, proxy subdomain → `202.92.6.172:5599`
   (`/etc/nginx/site-node/reminder.nguyenvando.com.conf`).
-- Trong container: Caddy serve PWA tĩnh + proxy `/trpc` → server. Scheduler chạy
-  ngay trong tiến trình server nên không có service nào khác phải giữ sống.
+- Trong container: Caddy serve PWA tĩnh + proxy `/trpc`, `/health`, `/export`,
+  `/agent/*` → server. Scheduler chạy ngay trong tiến trình server nên không có
+  service nào khác phải giữ sống.
+  **Thêm route REST mới ở server thì phải thêm một `handle` trong
+  [deploy/Caddyfile](deploy/Caddyfile)**, nếu không nó rơi xuống nhánh SPA và
+  trả về `index.html` kèm mã 200 — client nhận HTML thay vì JSON và hỏng im
+  lặng. Đường đi qua `/trpc` thì không dính, vì `/trpc/*` đã được proxy sẵn.
 
 Biến môi trường thật nằm ở `/data/app-reminder/deploy/.env` trên server,
 không đi qua git.
