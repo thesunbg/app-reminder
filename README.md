@@ -14,7 +14,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
 | 4 | Biểu đồ nâng cao (heatmap, theo tuần/nhóm, theo thứ, lọc thành viên) | ✅ xong |
-| 5 | Học tập: thời khoá biểu, bài tập (nhắc 19:00 hôm trước + 07:00), điểm, dashboard phụ huynh | ✅ xong |
+| 5 | Học tập **theo từng con**: thời khoá biểu, bài tập (môn/hạn tuỳ chọn, ảnh đề bài), điểm, dashboard phụ huynh | ✅ xong |
 | 6 | Nhập bằng giọng nói + LLM | ❌ bỏ — chủ nhà quyết định không cần AI, chỉ cần nhắc theo lịch |
 | 7 | Push native (FCM) + vỏ Capacitor + local notification | ✅ code xong, **chưa build app lần nào** |
 | 8 | Agent máy tính: thời lượng dùng app, nhật ký tự động từ máy | ✅ xong |
@@ -188,6 +188,12 @@ dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
   (tên, email, vai trò, ngày sinh, màu), tắt/bật, đặt lại mật khẩu và gỡ hẳn
   thành viên. Phụ huynh còn lại vẫn xem được cả nhà nhưng không đụng vào tài
   khoản người khác.
+- **Việc định kỳ**: nhìn thì cả nhà nhìn được, nhưng *tick / sửa / lưu trữ* thì
+  chỉ chủ việc — **trừ việc của con, phụ huynh vẫn tick hộ được** (bố mẹ giao
+  việc và theo dõi khi con còn nhỏ). Hai phụ huynh không tick hộ nhau: việc tập
+  thể dục của người này mà người kia tick thì con số chẳng còn nghĩa gì. Server
+  chặn ở `canEditRoutine`, giao diện dùng cờ `canEdit` để khoá nút sẵn thay vì
+  để bấm rồi mới báo lỗi.
 
 Người **bootstrap gia đình** là quản trị. Migration `user_is_admin` gán cờ này
 cho phụ huynh được tạo sớm nhất của mỗi gia đình — thiếu bước đó thì sau khi
@@ -203,6 +209,21 @@ dữ liệu (cascade) và **không khôi phục được ngoài backup hằng đ
 giao diện, và giao diện hiện đúng số bản ghi sắp mất trước khi hỏi.
 
 Nhật ký của con mặc định riêng tư — xem lý do ở `docs/PLAN.md` mục 5.4.
+
+**Bài tập ghi nhanh.** Thứ bắt buộc duy nhất là *nội dung* — ô nhập nhiều dòng,
+chép nguyên đề vào cũng được. Môn và hạn nộp đều tuỳ chọn: con ghi vội giữa giờ
+ra chơi rồi phân loại sau. Bài **không có hạn thì không được nhắc** (engine chỉ
+nhìn `date`), nó chỉ nằm trong danh sách chưa xong và luôn xếp cuối; bài không
+hạn cũng không bao giờ bị tính là "quá hạn". Bài thi và điểm thì vẫn bắt buộc có
+ngày, vì thiếu ngày là không xếp được vào biểu đồ.
+
+**Ảnh đề bài** (tối đa 6 ảnh/bài) lưu **thẳng trong Postgres**, không ra thư mục
+trên đĩa: như vậy ảnh đi theo bản dump hằng đêm của `deploy/backup.sh`, không cần
+thêm volume, và không có cảnh backup DB thì có mà ảnh thì mất. Trình duyệt nén
+ảnh về 1600px/JPEG 0.8 trước khi gửi (`apps/web/src/lib/image.ts`) nên mỗi tấm
+chỉ vài trăm KB. Ảnh ra qua `GET /study/anh/:id` — **route REST mới thì phải thêm
+một `handle` trong [deploy/Caddyfile](deploy/Caddyfile)**, nếu không nó rơi xuống
+nhánh SPA và trả `index.html` kèm mã 200.
 
 **Ghi chú.** Một loại duy nhất (`Note`) phục vụ cả ghi chú tự do, danh sách
 việc, và nhắc bảo dưỡng — nhắc nhở chỉ là *trường tuỳ chọn* của ghi chú, không

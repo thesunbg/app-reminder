@@ -6,6 +6,7 @@ import { db } from './db.js'
 import { env, isProd } from './env.js'
 import { registerExportRoute } from './export.js'
 import { registerAgentRoute } from './screen/route.js'
+import { registerStudyAttachmentRoute } from './study/attachment.js'
 import { startScheduler } from './notifications/scheduler.js'
 import { appRouter } from './trpc/router.js'
 import { createContext } from './trpc/trpc.js'
@@ -16,6 +17,9 @@ const app = Fastify({
     : { transport: undefined, level: 'info' },
   // Fastify 5 đã chuyển các tuỳ chọn router vào routerOptions
   routerOptions: { maxParamLength: 5000 },
+  // ảnh bài tập đi qua tRPC dưới dạng base64 (+33% so với nhị phân); mặc định
+  // 1MB của Fastify chặn cả ảnh đã nén, nên nới lên vừa đủ cho giới hạn 3MB/ảnh
+  bodyLimit: 6 * 1024 * 1024,
 })
 
 await app.register(cors, {
@@ -37,6 +41,7 @@ await app.register(fastifyTRPCPlugin, {
 
 await registerExportRoute(app)
 await registerAgentRoute(app)
+await registerStudyAttachmentRoute(app)
 
 app.get('/health', async () => {
   await db.$queryRaw`SELECT 1`

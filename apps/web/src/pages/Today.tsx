@@ -65,20 +65,33 @@ export default function Today() {
       )}
 
       <ul className="flex flex-col gap-2">
-        {items.map(({ routine, log }) => {
+        {items.map(({ routine, log, canEdit }) => {
           const status = log?.status as Status | undefined
           const overdue = isToday && !status && routine.timeOfDay < now
           const pending = mark.isPending && mark.variables?.routineId === routine.id
+          // việc của phụ huynh khác: thấy được nhưng không tick hộ được
+          const lockedBy = canEdit ? null : routine.owner.name
           return (
             <li
               key={routine.id}
               className="card flex items-center gap-3 px-3 py-3"
-              style={status ? { opacity: 0.68 } : overdue ? { borderColor: 'color-mix(in srgb, var(--warn) 55%, var(--border))' } : undefined}
+              style={
+                status || lockedBy
+                  ? { opacity: lockedBy && !status ? 0.8 : 0.68 }
+                  : overdue
+                    ? { borderColor: 'color-mix(in srgb, var(--warn) 55%, var(--border))' }
+                    : undefined
+              }
             >
               <button
                 onClick={() => mark.mutate({ routineId: routine.id, date, status: 'DONE' })}
-                disabled={pending}
-                aria-label={status === 'DONE' ? 'Bỏ đánh dấu hoàn thành' : 'Đánh dấu hoàn thành'}
+                disabled={pending || !canEdit}
+                aria-label={
+                  lockedBy
+                    ? `Việc của ${lockedBy}, chỉ người đó tick được`
+                    : status === 'DONE' ? 'Bỏ đánh dấu hoàn thành' : 'Đánh dấu hoàn thành'
+                }
+                title={lockedBy ? `Việc của ${lockedBy} — chỉ người đó tick được` : undefined}
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold text-white transition"
                 style={
                   status === 'DONE'
@@ -101,7 +114,8 @@ export default function Today() {
                   <span className="tabular-nums">{routine.timeOfDay}</span>
                   <span>·</span>
                   <span>{minutesLabel(routine.durationMin)}</span>
-                  {overdue && <><span>·</span><span className="font-semibold">quá giờ</span></>}
+                  {overdue && !lockedBy && <><span>·</span><span className="font-semibold">quá giờ</span></>}
+                  {lockedBy && <><span>·</span><span>việc của {lockedBy}</span></>}
                 </p>
               </div>
 
@@ -109,10 +123,12 @@ export default function Today() {
                 <Avatar name={routine.owner.name} color={routine.owner.avatarColor} size={26} />
               )}
 
-              <div className="flex gap-1">
-                <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'PARTIAL' })} disabled={pending}>½</MiniBtn>
-                <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'SKIPPED' })} disabled={pending}>–</MiniBtn>
-              </div>
+              {canEdit && (
+                <div className="flex gap-1">
+                  <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'PARTIAL' })} disabled={pending}>½</MiniBtn>
+                  <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'SKIPPED' })} disabled={pending}>–</MiniBtn>
+                </div>
+              )}
             </li>
           )
         })}
@@ -128,7 +144,8 @@ function StudyToday({ childId }: { childId: string }) {
   const toggle = trpc.study.homeworkToggle.useMutation({ onSuccess: () => void utils.study.invalidate() })
   const x = d.data
   if (!x) return null
-  const due = [...x.homework.overdue, ...x.homework.pending].filter((h) => h.date <= addDays(today(), 1))
+  // bài không có hạn không chen vào màn hình Hôm nay — nó không đến hạn hôm nay
+  const due = [...x.homework.overdue, ...x.homework.pending].filter((h) => h.date && h.date <= addDays(today(), 1))
   if (x.todayClasses.length === 0 && due.length === 0) return null
   return (
     <div className="card mb-4 px-4 py-3">
@@ -149,11 +166,13 @@ function StudyToday({ childId }: { childId: string }) {
                 onClick={() => toggle.mutate({ id: h.id, done: true })}
                 aria-label="Đánh dấu xong"
                 className="h-5 w-5 shrink-0 rounded-full border-2"
-                style={{ borderColor: h.date < today() ? 'var(--danger)' : 'var(--border)' }}
+                style={{ borderColor: h.date! < today() ? 'var(--danger)' : 'var(--border)' }}
               />
               <span className="font-medium">{h.title}</span>
-              <span className="text-xs" style={{ color: h.date < today() ? 'var(--danger)' : 'var(--muted)' }}>
-                {h.subject} · {h.date < today() ? 'quá hạn' : h.date === today() ? 'nộp hôm nay' : 'nộp ngày mai'}
+              <span className="text-xs" style={{ color: h.date! < today() ? 'var(--danger)' : 'var(--muted)' }}>
+                {[h.subject, h.date! < today() ? 'quá hạn' : h.date === today() ? 'nộp hôm nay' : 'nộp ngày mai']
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
             </li>
           ))}

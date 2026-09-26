@@ -384,21 +384,51 @@ model StudyRecord {
   childId String
   child   User   @relation(fields: [childId], references: [id], onDelete: Cascade)
 
-  subject  String
+  /// Môn học — KHÔNG bắt buộc: con ghi nhanh "làm nốt bài hình" mà chưa kịp
+  /// nghĩ xem nó thuộc môn nào thì vẫn lưu được.
+  subject  String?
   kind     String // HOMEWORK | EXAM | SCORE
+  /// Nội dung. Với HOMEWORK đây là ô nhập nhiều dòng (chép nguyên đề bài),
+  /// nên có thể dài; chỗ nào hiển thị một dòng thì tự cắt bớt.
   title    String
   score    Float?
   maxScore Float?
-  /// HOMEWORK/EXAM: hạn nộp hoặc ngày thi; SCORE: ngày có điểm
-  date     String // "YYYY-MM-DD"
+  /// HOMEWORK: hạn nộp, ĐƯỢC PHÉP để trống — bài không hạn thì không nhắc,
+  /// chỉ nằm trong danh sách chưa xong. EXAM/SCORE thì bắt buộc (ngày thi,
+  /// ngày có điểm), router chặn theo kind.
+  date     String? // "YYYY-MM-DD"
   note     String?
   /// chỉ dùng cho HOMEWORK
   doneAt   DateTime?
   createdAt DateTime @default(now())
 
+  attachments StudyAttachment[]
+
   @@index([childId, date])
   @@index([childId, kind, doneAt])
   @@index([childId, subject])
+}
+
+/// Ảnh đính kèm bài tập (thường là ảnh chụp đề bài trên bảng hoặc trong sách).
+///
+/// Lưu thẳng trong Postgres chứ không ra thư mục trên đĩa: như vậy ảnh đi theo
+/// bản dump hằng đêm của `deploy/backup.sh`, không cần thêm volume, không cần
+/// sửa Caddy để phục vụ file tĩnh, và không có nguy cơ backup DB thì có mà ảnh
+/// thì mất. Trình duyệt đã nén ảnh về ~1600px trước khi gửi nên mỗi tấm chỉ
+/// vài trăm KB.
+model StudyAttachment {
+  id       String      @id @default(cuid())
+  recordId String
+  record   StudyRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  mime     String // image/jpeg | image/png | image/webp
+  size     Int
+  width    Int?
+  height   Int?
+  data     Bytes
+  createdAt DateTime @default(now())
+
+  @@index([recordId])
 }
 
 // ---------- Nhóm 6: agent máy tính (phase 8) ----------

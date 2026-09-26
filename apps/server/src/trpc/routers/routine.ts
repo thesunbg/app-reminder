@@ -28,14 +28,36 @@ const routineInput = z.object({
   ownerId: z.string().optional(),
 })
 
-/** Người dùng chỉ thao tác được trên routine của mình; phụ huynh thao tác được trên cả nhà. */
+/**
+ * Ai được sửa / tick một việc định kỳ.
+ *
+ * - việc của chính mình: luôn được;
+ * - việc của CON: phụ huynh được — bố mẹ giao việc, theo dõi và tick hộ khi con
+ *   còn nhỏ hoặc chưa cầm máy;
+ * - việc của một PHỤ HUYNH khác: KHÔNG ai được, kể cả phụ huynh còn lại. Việc
+ *   tập thể dục của người này mà người kia tick hộ thì con số chẳng còn nghĩa
+ *   gì, và đó cũng không phải việc của họ.
+ *
+ * Nhìn thì vẫn nhìn được cả nhà — đây chỉ là quyền ghi.
+ */
+export function canEditRoutine(userId: string, role: string, owner: { id: string; role: string }): boolean {
+  if (owner.id === userId) return true
+  return role === 'PARENT' && owner.role === 'CHILD'
+}
+
 async function assertCanEdit(userId: string, role: string, familyId: string, routineId: string) {
-  const routine = await db.routine.findUnique({ where: { id: routineId } })
+  const routine = await db.routine.findUnique({
+    where: { id: routineId },
+    include: { owner: { select: { id: true, name: true, role: true } } },
+  })
   if (!routine || routine.familyId !== familyId) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Không tìm thấy công việc' })
   }
-  if (routine.ownerId !== userId && role !== 'PARENT') {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'Không có quyền sửa công việc này' })
+  if (!canEditRoutine(userId, role, routine.owner)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: `Đây là việc của ${routine.owner.name} — chỉ người đó mới tick hay sửa được`,
+    })
   }
   return routine
 }
@@ -45,15 +67,16 @@ export const routineRouter = router({
     .input(z.object({ ownerId: z.string().optional(), includeArchived: z.boolean().default(false) }).default({}))
     .query(async ({ ctx, input }) => {
       const ownerId = input.ownerId ?? (ctx.user.role === 'PARENT' ? undefined : ctx.user.id)
-      return db.routine.findMany({
+      const rows = await db.routine.findMany({
         where: {
           familyId: ctx.user.familyId,
           ...(ownerId ? { ownerId } : {}),
           ...(input.includeArchived ? {} : { active: true }),
         },
         orderBy: [{ sortOrder: 'asc' }, { timeOfDay: 'asc' }],
-        include: { owner: { select: { id: true, name: true, avatarColor: true } } },
+        include: { owner: { select: { id: true, name: true, avatarColor: true, role: true } } },
       })
+      return rows.map((r) => ({ ...r, canEdit: canEditRoutine(ctx.user.id, ctx.user.role, r.owner) }))
     }),
 
   /** Danh sách việc phải làm của một ngày, kèm trạng thái đã tick hay chưa. */
@@ -70,7 +93,7 @@ export const routineRouter = router({
           ...(ownerId ? { ownerId } : {}),
         },
         orderBy: [{ timeOfDay: 'asc' }, { sortOrder: 'asc' }],
-        include: { owner: { select: { id: true, name: true, avatarColor: true } } },
+        include: { owner: { select: { id: true, name: true, avatarColor: true, role: true } } },
       })
 
       const due = routines.filter((r) => occursOn(r.rrule, r.startDate, date))
@@ -86,6 +109,9 @@ export const routineRouter = router({
         items: due.map((r) => ({
           routine: r,
           log: byRoutine.get(r.id) ?? null,
+          // giao diện dùng cờ này để khoá nút tick thay vì để người ta bấm rồi
+          // mới nhận lỗi
+          canEdit: canEditRoutine(ctx.user.id, ctx.user.role, r.owner),
         })),
       }
     }),
@@ -196,6 +222,7 @@ export const routineRouter = router({
       const routines = await db.routine.findMany({
         where: { familyId: ctx.user.familyId, active: true, ...(ownerId ? { ownerId } : {}) },
         orderBy: [{ timeOfDay: 'asc' }],
+        include: { owner: { select: { id: true, name: true, role: true } } },
       })
       const logs = await db.taskLog.findMany({
         where: { date: { gte: from, lte: to }, routineId: { in: routines.map((r) => r.id) } },
@@ -211,6 +238,7 @@ export const routineRouter = router({
           const dayset = new Set(days)
           return {
             routine: r,
+            canEdit: canEditRoutine(ctx.user.id, ctx.user.role, r.owner),
             days: Array.from({ length: 7 }, (_, i) => {
               const d = addDays(from, i)
               return {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ScreenTime from '@/components/ScreenTime'
 import { Avatar, Card, EmptyState, ErrorNote, Spinner, StatTile } from '@/components/ui'
 import { addDays, dayMonth, today, weekdayShort } from '@/lib/format'
+import { prepareImage, type PreparedImage } from '@/lib/image'
 import { trpc, type RouterOutputs } from '@/lib/trpc'
 
 type Tab = 'tong-quan' | 'tkb' | 'bai-tap' | 'diem' | 'may-tinh'
@@ -39,7 +40,9 @@ export default function Study() {
     <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-4 sm:pb-8">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-bold">Học tập</h1>
-        {list.length > 1 && (
+        {/* Hiện cả khi mới có một con: thời khoá biểu, bài tập và điểm đều theo
+            TỪNG con, nên phải thấy rõ mình đang xem của ai. */}
+        {list.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {list.map((c) => (
               <button
@@ -72,7 +75,7 @@ export default function Study() {
       </div>
 
       {tab === 'tong-quan' && <Dashboard childId={child.id} onGo={setTab} />}
-      {tab === 'tkb' && <Schedule childId={child.id} />}
+      {tab === 'tkb' && <Schedule childId={child.id} childName={child.name} />}
       {tab === 'bai-tap' && <Homework childId={child.id} />}
       {tab === 'diem' && <Scores childId={child.id} />}
       {tab === 'may-tinh' && <ScreenTime userId={child.id} canManage />}
@@ -139,7 +142,7 @@ function Dashboard({ childId, onGo }: { childId: string; onGo: (t: Tab) => void 
           <div className="mt-3 rounded-xl px-3 py-2 text-sm" style={{ background: 'color-mix(in srgb, var(--warn) 12%, transparent)' }}>
             <p className="mb-1 text-xs font-semibold" style={{ color: 'var(--warn)' }}>Sắp thi</p>
             {x.upcomingExams.map((e) => (
-              <p key={e.id}>{dayMonth(e.date)} · <b>{e.subject}</b> — {e.title}</p>
+              <p key={e.id}>{e.date ? dayMonth(e.date) : '—'} · <b>{e.subject ?? 'Chưa phân môn'}</b> — {e.title}</p>
             ))}
           </div>
         )}
@@ -196,7 +199,7 @@ function SubjectBars({ rows }: { rows: { subject: string; avg: number; count: nu
 
 type ClassRow = RouterOutputs['study']['schedule'][number]
 
-function Schedule({ childId }: { childId: string }) {
+function Schedule({ childId, childName }: { childId: string; childName: string }) {
   const utils = trpc.useUtils()
   const rows = trpc.study.schedule.useQuery({ childId })
   const [editing, setEditing] = useState<Partial<ClassRow> | null>(null)
@@ -208,8 +211,14 @@ function Schedule({ childId }: { childId: string }) {
   for (const r of rows.data ?? []) byDay.set(r.weekday, [...(byDay.get(r.weekday) ?? []), r])
   const hasSunday = (byDay.get(7)?.length ?? 0) > 0
 
+  const total = rows.data?.length ?? 0
+
   return (
     <div className="flex flex-col gap-3">
+      <p className="text-sm" style={{ color: 'var(--muted)' }}>
+        Thời khoá biểu của <b style={{ color: 'var(--text)' }}>{childName}</b>
+        {total > 0 ? ` · ${total} tiết/tuần` : ' · chưa có tiết nào'}
+      </p>
       {editing && <ClassForm childId={childId} initial={editing} onDone={() => { setEditing(null); void utils.study.invalidate() }} />}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {WEEKDAYS.slice(0, hasSunday ? 7 : 6).map((label, i) => {
@@ -301,27 +310,172 @@ function plus45(t: string): string {
 
 type Rec = RouterOutputs['study']['records'][number]
 
-function HomeworkRow({ h, today: t, onToggle, onEdit }: { h: Rec; today: string; onToggle: (done: boolean) => void; onEdit?: () => void }) {
+/** Nhãn hạn nộp; bài không có hạn thì nói thẳng là chưa đặt hạn. */
+function dueLabel(date: string | null, t: string): string {
+  if (!date) return 'chưa đặt hạn'
+  if (date === t) return 'hôm nay'
+  if (date === addDays(t, 1)) return 'ngày mai'
+  return `${weekdayShort(date)} ${dayMonth(date)}`
+}
+
+type HomeworkLike = Omit<Rec, 'attachments'> & { attachments?: Rec['attachments'] }
+
+function HomeworkRow({ h, today: t, onToggle, onEdit }: { h: HomeworkLike; today: string; onToggle: (done: boolean) => void; onEdit?: () => void }) {
   const done = Boolean(h.doneAt)
-  const overdue = !done && h.date < t
-  const label = h.date === t ? 'hôm nay' : h.date === addDays(t, 1) ? 'ngày mai' : `${weekdayShort(h.date)} ${dayMonth(h.date)}`
+  const overdue = !done && Boolean(h.date) && h.date! < t
+  const meta = [h.subject, `${overdue ? 'quá hạn ' : ''}${dueLabel(h.date, t)}`].filter(Boolean).join(' · ')
+  const images = h.attachments ?? []
   return (
-    <li className="flex items-center gap-3 text-sm" style={{ opacity: done ? 0.6 : 1 }}>
+    <li className="flex items-start gap-3 text-sm" style={{ opacity: done ? 0.6 : 1 }}>
       <button
         onClick={() => onToggle(!done)}
         aria-label={done ? 'Bỏ đánh dấu xong' : 'Đánh dấu xong'}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold text-white"
+        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold text-white"
         style={done ? { background: 'var(--ok)', borderColor: 'var(--ok)' } : { borderColor: overdue ? 'var(--danger)' : 'var(--border)' }}
       >
         {done ? '✓' : ''}
       </button>
       <button className="min-w-0 flex-1 text-left" onClick={onEdit} disabled={!onEdit}>
-        <span className={`font-medium ${done ? 'line-through' : ''}`}>{h.title}</span>
-        <span className="ml-1 text-xs" style={{ color: overdue ? 'var(--danger)' : 'var(--muted)' }}>
-          {h.subject} · {overdue ? 'quá hạn ' : ''}{label}
+        {/* nội dung giờ là ô nhiều dòng — giữ nguyên xuống dòng con đã gõ */}
+        <span className={`block whitespace-pre-wrap font-medium ${done ? 'line-through' : ''}`}>{h.title}</span>
+        <span className="text-xs" style={{ color: overdue ? 'var(--danger)' : 'var(--muted)' }}>
+          {meta}
+          {images.length > 0 && ` · ${images.length} ảnh`}
         </span>
+        {images.length > 0 && (
+          <span className="mt-1.5 flex flex-wrap gap-1.5">
+            {images.map((a) => (
+              <img
+                key={a.id}
+                src={`/study/anh/${a.id}`}
+                alt="Ảnh bài tập"
+                loading="lazy"
+                className="h-16 w-16 rounded-lg object-cover"
+                style={{ background: 'var(--surface-2)' }}
+              />
+            ))}
+          </span>
+        )}
       </button>
     </li>
+  )
+}
+
+/**
+ * Chọn / chụp ảnh đề bài. Trên điện thoại, `capture="environment"` mở thẳng
+ * camera sau — con giơ máy chụp cái bảng là xong, không phải qua thư viện ảnh.
+ */
+function AttachmentPicker({ recordId, existing, queued, onQueue, onUnqueue, onError, onChanged }: {
+  recordId: string | null
+  existing: Rec['attachments']
+  queued: PreparedImage[]
+  onQueue: (im: PreparedImage) => void
+  onUnqueue: (index: number) => void
+  onError: (msg: string | null) => void
+  onChanged: () => void
+}) {
+  const [working, setWorking] = useState(false)
+  const addAttachment = trpc.study.attachmentAdd.useMutation()
+  const removeAttachment = trpc.study.attachmentRemove.useMutation({ onSuccess: onChanged })
+
+  async function pick(files: FileList | null) {
+    if (!files?.length) return
+    onError(null)
+    setWorking(true)
+    try {
+      for (const file of Array.from(files)) {
+        const im = await prepareImage(file)
+        if (im.size > 3 * 1024 * 1024) {
+          onError('Ảnh vẫn quá lớn sau khi nén — thử chụp lại gần hơn')
+          continue
+        }
+        // bài đã có id thì gửi luôn; chưa có thì xếp hàng, lưu xong sẽ gửi
+        if (recordId) {
+          await addAttachment.mutateAsync({
+            recordId, mime: im.mime, data: im.data, width: im.width, height: im.height,
+          })
+          onChanged()
+        } else {
+          onQueue(im)
+        }
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Không xử lý được ảnh')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const total = existing.length + queued.length
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="btn btn-ghost !py-1.5 text-xs" style={{ cursor: 'pointer' }}>
+          {working ? 'Đang xử lý ảnh…' : '📷 Thêm ảnh'}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            className="hidden"
+            disabled={working || total >= 6}
+            onChange={(e) => {
+              void pick(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <span className="text-xs" style={{ color: 'var(--muted)' }}>
+          {total > 0 ? `${total}/6 ảnh` : 'Chụp đề bài trên bảng cũng được'}
+        </span>
+      </div>
+
+      {total > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {existing.map((a) => (
+            <div key={a.id} className="relative">
+              <img
+                src={`/study/anh/${a.id}`}
+                alt="Ảnh bài tập"
+                className="h-20 w-20 rounded-lg object-cover"
+                style={{ background: 'var(--surface-2)' }}
+              />
+              <button
+                type="button"
+                aria-label="Xoá ảnh"
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ background: 'var(--danger)' }}
+                disabled={removeAttachment.isPending}
+                onClick={() => removeAttachment.mutate({ id: a.id })}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {queued.map((im, i) => (
+            <div key={`q${i}`} className="relative">
+              <img src={im.previewUrl} alt="Ảnh sắp thêm" className="h-20 w-20 rounded-lg object-cover opacity-70" />
+              <button
+                type="button"
+                aria-label="Bỏ ảnh này"
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white"
+                style={{ background: 'var(--danger)' }}
+                onClick={() => onUnqueue(i)}
+              >
+                ×
+              </button>
+              <span
+                className="absolute bottom-0 left-0 right-0 rounded-b-lg text-center text-[10px] text-white"
+                style={{ background: 'rgba(0,0,0,.55)' }}
+              >
+                lưu xong sẽ gửi
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -344,7 +498,7 @@ function Homework({ childId }: { childId: string }) {
       {editing ? (
         <RecordForm childId={childId} kind="HOMEWORK" initial={editing} onDone={() => { setEditing(null); void utils.study.invalidate() }} onRemove={editing.id ? () => remove.mutate({ id: editing.id! }) : undefined} />
       ) : (
-        <button className="btn btn-primary self-start" onClick={() => setEditing({ date: addDays(t, 1) })}>+ Bài tập</button>
+        <button className="btn btn-primary self-start" onClick={() => setEditing({ kind: 'HOMEWORK' })}>+ Bài tập</button>
       )}
       <Card className="p-4">
         <h3 className="mb-2 text-sm font-semibold">Chưa xong ({open.length})</h3>
@@ -375,17 +529,53 @@ function Homework({ childId }: { childId: string }) {
 function RecordForm({ childId, kind, initial, onDone, onRemove }: {
   childId: string; kind: 'HOMEWORK' | 'EXAM' | 'SCORE'; initial: Partial<Rec>; onDone: () => void; onRemove?: () => void
 }) {
+  const utils = trpc.useUtils()
   const [k, setK] = useState<'HOMEWORK' | 'EXAM' | 'SCORE'>(initial.kind as 'HOMEWORK' | 'EXAM' | 'SCORE' | undefined ?? kind)
   const [subject, setSubject] = useState(initial.subject ?? '')
+  /// id của bài đang sửa; null khi thêm mới (ảnh phải chờ lưu xong mới gắn được)
+  const saved = initial.id ?? null
   const [title, setTitle] = useState(initial.title ?? '')
-  const [date, setDate] = useState(initial.date ?? today())
+  // bài tập mới để trống hạn: con ghi nhanh rồi đặt hạn sau nếu cần
+  const [date, setDate] = useState(initial.date ?? (initial.kind === 'HOMEWORK' || kind === 'HOMEWORK' ? '' : today()))
   const [score, setScore] = useState(initial.score?.toString() ?? '')
   const [maxScore, setMaxScore] = useState(initial.maxScore?.toString() ?? '10')
   const [note, setNote] = useState(initial.note ?? '')
-  const create = trpc.study.recordCreate.useMutation({ onSuccess: onDone })
+  // Ảnh chỉ gắn được vào bài đã có id. Khi thêm mới thì giữ tạm ở đây rồi
+  // upload ngay sau khi lưu xong — con không phải bấm lưu hai lần.
+  const [queued, setQueued] = useState<PreparedImage[]>([])
+  const [imgError, setImgError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+
+  const addAttachment = trpc.study.attachmentAdd.useMutation()
+
+  async function uploadAll(recordId: string, images: PreparedImage[]) {
+    for (const im of images) {
+      await addAttachment.mutateAsync({
+        recordId,
+        mime: im.mime,
+        data: im.data,
+        width: im.width,
+        height: im.height,
+      })
+    }
+  }
+
+  const create = trpc.study.recordCreate.useMutation({
+    onSuccess: async (rec) => {
+      if (queued.length > 0) {
+        setUploading(true)
+        try {
+          await uploadAll(rec.id, queued)
+        } finally {
+          setUploading(false)
+        }
+      }
+      onDone()
+    },
+  })
   const update = trpc.study.recordUpdate.useMutation({ onSuccess: onDone })
-  const busy = create.isPending || update.isPending
-  const err = create.error?.message ?? update.error?.message
+  const busy = create.isPending || update.isPending || uploading
+  const err = create.error?.message ?? update.error?.message ?? addAttachment.error?.message ?? imgError
   const wantsScore = k !== 'HOMEWORK'
 
   return (
@@ -394,7 +584,7 @@ function RecordForm({ childId, kind, initial, onDone, onRemove }: {
       onSubmit={(e) => {
         e.preventDefault()
         const data = {
-          childId, kind: k, subject: subject.trim(), title: title.trim(), date,
+          childId, kind: k, subject: subject.trim() || null, title: title.trim(), date: date || null,
           score: wantsScore && score !== '' ? Number(score) : null,
           maxScore: wantsScore ? Number(maxScore) || 10 : null,
           note: note.trim() || null,
@@ -413,9 +603,48 @@ function RecordForm({ childId, kind, initial, onDone, onRemove }: {
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <input className="input-base" placeholder="Môn" value={subject} onChange={(e) => setSubject(e.target.value)} autoFocus required />
-        <input className="input-base" type="date" value={date} onChange={(e) => setDate(e.target.value)} required aria-label={k === 'SCORE' ? 'Ngày' : 'Hạn / ngày thi'} />
-        <input className="input-base col-span-2" placeholder={k === 'HOMEWORK' ? 'Bài gì (vd: Bài 5 trang 32)' : 'Tên bài (vd: Kiểm tra 15 phút)'} value={title} onChange={(e) => setTitle(e.target.value)} required />
+        {/* bài tập: nội dung là thứ bắt buộc duy nhất, nên để nó lên đầu */}
+        {k === 'HOMEWORK' ? (
+          <textarea
+            className="input-base col-span-2 min-h-24"
+            placeholder="Nội dung bài tập — chép đề vào đây cũng được"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+            required
+          />
+        ) : (
+          <input
+            className="input-base col-span-2"
+            placeholder="Tên bài (vd: Kiểm tra 15 phút)"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+            required
+          />
+        )}
+        <input
+          className="input-base"
+          placeholder={k === 'HOMEWORK' ? 'Môn (không bắt buộc)' : 'Môn'}
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          required={k !== 'HOMEWORK'}
+        />
+        <input
+          className="input-base"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required={k !== 'HOMEWORK'}
+          aria-label={k === 'SCORE' ? 'Ngày' : 'Hạn / ngày thi'}
+        />
+        {k === 'HOMEWORK' && (
+          <p className="col-span-2 -mt-1 text-xs" style={{ color: 'var(--muted)' }}>
+            {date
+              ? 'Có hạn thì app nhắc 19:00 tối hôm trước và 07:00 sáng hôm nộp.'
+              : 'Không đặt hạn cũng được — khi đó app không nhắc, bài chỉ nằm trong danh sách chưa xong.'}
+          </p>
+        )}
         {wantsScore && (
           <>
             <input className="input-base" type="number" step="0.25" min={0} placeholder={k === 'EXAM' ? 'Điểm (bỏ trống nếu chưa có)' : 'Điểm'} value={score} onChange={(e) => setScore(e.target.value)} />
@@ -424,9 +653,26 @@ function RecordForm({ childId, kind, initial, onDone, onRemove }: {
         )}
         <input className="input-base col-span-2" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+      {k === 'HOMEWORK' && (
+        <AttachmentPicker
+          recordId={saved}
+          existing={(initial as Rec).attachments ?? []}
+          queued={queued}
+          onQueue={(im) => setQueued((q) => [...q, im])}
+          onUnqueue={(i) => setQueued((q) => q.filter((_, idx) => idx !== i))}
+          onError={setImgError}
+          onChanged={() => void utils.study.invalidate()}
+        />
+      )}
+
       {err && <ErrorNote message={err} />}
       <div className="flex gap-2">
-        <button className="btn btn-primary" disabled={busy || !subject.trim() || !title.trim()}>Lưu</button>
+        <button
+          className="btn btn-primary"
+          disabled={busy || !title.trim() || (k !== 'HOMEWORK' && (!subject.trim() || !date))}
+        >
+          Lưu
+        </button>
         <button type="button" className="btn btn-ghost" onClick={onDone}>Huỷ</button>
         {onRemove && <button type="button" className="btn btn-ghost ml-auto text-xs" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm('Xoá mục này?')) onRemove() }}>Xoá</button>}
       </div>
@@ -446,7 +692,10 @@ function Scores({ childId }: { childId: string }) {
   const remove = trpc.study.recordRemove.useMutation({ onSuccess: () => { setEditing(null); void utils.study.invalidate() } })
 
   const rows = useMemo(() => (list.data ?? []).filter((r) => r.kind !== 'HOMEWORK'), [list.data])
-  const subjects = useMemo(() => [...new Set(rows.map((r) => r.subject))].sort((a, b) => a.localeCompare(b, 'vi')), [rows])
+  const subjects = useMemo(
+    () => [...new Set(rows.map((r) => r.subject).filter((x): x is string => Boolean(x)))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [rows],
+  )
   if (list.isLoading) return <Spinner />
   const shown = subjectFilter ? rows.filter((r) => r.subject === subjectFilter) : rows
 
@@ -481,9 +730,9 @@ function Scores({ childId }: { childId: string }) {
               const v = r.score === null || r.score === undefined ? null : Math.round((r.score / (r.maxScore ?? 10)) * 100) / 10
               return (
                 <li key={r.id} className="flex items-center gap-3 text-sm">
-                  <span className="w-12 shrink-0 tabular-nums text-xs" style={{ color: 'var(--muted)' }}>{dayMonth(r.date)}</span>
+                  <span className="w-12 shrink-0 tabular-nums text-xs" style={{ color: 'var(--muted)' }}>{r.date ? dayMonth(r.date) : '—'}</span>
                   <button className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
-                    <span className="font-medium">{r.subject}</span>
+                    <span className="font-medium">{r.subject ?? 'Chưa phân môn'}</span>
                     <span className="ml-1 text-xs" style={{ color: 'var(--muted)' }}>{r.kind === 'EXAM' ? '🧪 ' : ''}{r.title}</span>
                   </button>
                   <span

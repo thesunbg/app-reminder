@@ -69,13 +69,18 @@ export default function Routines() {
               </p>
             </div>
             <Avatar name={r.owner.name} color={r.owner.avatarColor} size={28} />
-            <button
-              className="btn btn-ghost !px-2.5 !py-1.5 text-xs"
-              onClick={() => { if (confirm(`Lưu trữ "${r.title}"? Lịch sử vẫn được giữ lại.`)) archive.mutate({ id: r.id }) }}
-              disabled={archive.isPending}
-            >
-              Lưu trữ
-            </button>
+            {r.canEdit ? (
+              <button
+                className="btn btn-ghost !px-2.5 !py-1.5 text-xs"
+                onClick={() => { if (confirm(`Lưu trữ "${r.title}"? Lịch sử vẫn được giữ lại.`)) archive.mutate({ id: r.id }) }}
+                disabled={archive.isPending}
+              >
+                Lưu trữ
+              </button>
+            ) : (
+              // việc của phụ huynh khác: xem được, nhưng sửa hay lưu trữ thì không
+              <span className="shrink-0 text-xs" style={{ color: 'var(--muted)' }}>của {r.owner.name}</span>
+            )}
           </li>
         ))}
       </ul>

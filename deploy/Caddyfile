@@ -22,6 +22,11 @@
 	handle /agent/* {
 		reverse_proxy server:3001
 	}
+	# Ảnh đính kèm bài tập. Thiếu khối này thì <img src="/study/anh/..."> rơi
+	# xuống nhánh SPA và nhận index.html kèm mã 200 — ảnh hỏng im lặng.
+	handle /study/* {
+		reverse_proxy server:3001
+	}
 
 	# PWA tĩnh — SPA fallback về index.html
 	handle {

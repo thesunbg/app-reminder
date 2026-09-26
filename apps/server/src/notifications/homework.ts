@@ -17,6 +17,8 @@ export const homeworkRef = (id: string, date: string, slot: number) => `${id}:${
 
 export async function materializeHomework(now: Date = new Date()): Promise<number> {
   const today = vnToday(now)
+  // date null = bài tập không có hạn: cố ý không nhắc, nó chỉ nằm trong danh
+  // sách chưa xong. Prisma bỏ qua chúng vì điều kiện gte/lte không khớp null.
   const records = await db.studyRecord.findMany({
     where: { kind: 'HOMEWORK', doneAt: null, date: { gte: today, lte: addDays(today, HORIZON_DAYS) } },
     include: { child: true },
@@ -30,6 +32,7 @@ export async function materializeHomework(now: Date = new Date()): Promise<numbe
     const channels = plannedChannels(u)
     if (channels.length === 0) continue
 
+    if (!r.date) continue // đã lọc ở query, giữ lại cho TypeScript và cho chắc
     const d = `${Number(r.date.slice(8, 10))}/${Number(r.date.slice(5, 7))}`
     for (const [i, slot] of SLOTS.entries()) {
       const fireDate = addDays(r.date, -slot.daysBefore)
@@ -37,13 +40,17 @@ export async function materializeHomework(now: Date = new Date()): Promise<numbe
       const fireAt = vnDateTimeToUtc(fireDate, slot.time)
       if (fireAt.getTime() <= now.getTime()) continue
       if (inQuietHours(vnTimeOf(fireAt), u.quietFrom, u.quietTo)) continue
+      // nội dung bài tập giờ là ô nhiều dòng nên có thể rất dài; tiêu đề thông
+      // báo phải gọn, phần đầy đủ để ở body
+      const short = r.title.length > 60 ? `${r.title.slice(0, 57).trimEnd()}…` : r.title
+      const head = [r.subject, `hạn ${d}`].filter(Boolean).join(' · ')
       plans.push({
         userId: u.id,
         kind: 'HOMEWORK_DUE' as const,
         refTable: 'homework',
         refId: homeworkRef(r.id, r.date, i),
-        title: slot.daysBefore === 0 ? `Nộp hôm nay: ${r.title}` : `Bài tập mai nộp: ${r.title}`,
-        body: `${r.subject} · hạn ${d}${r.note ? `\n${r.note}` : ''}`,
+        title: slot.daysBefore === 0 ? `Nộp hôm nay: ${short}` : `Bài tập mai nộp: ${short}`,
+        body: `${head}${r.title.length > 60 ? `\n${r.title}` : ''}${r.note ? `\n${r.note}` : ''}`,
         fireAt,
         channels,
       })

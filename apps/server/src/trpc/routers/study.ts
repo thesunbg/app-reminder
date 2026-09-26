@@ -49,13 +49,32 @@ const scheduleInput = z.object({
 const recordInput = z.object({
   childId: z.string(),
   kind: z.enum(KINDS),
-  subject: z.string().trim().min(1).max(60),
-  title: z.string().trim().min(1).max(200),
-  date: dateSchema,
+  /// môn không bắt buộc — ghi nhanh rồi phân loại sau
+  subject: z.string().trim().max(60).nullish(),
+  /// nội dung, có thể nhiều dòng (chép nguyên đề bài)
+  title: z.string().trim().min(1).max(4000),
+  /// hạn nộp: bắt buộc với EXAM/SCORE, tuỳ chọn với HOMEWORK (xem assertDate)
+  date: dateSchema.nullish(),
   score: z.number().min(0).max(1000).nullish(),
   maxScore: z.number().min(1).max(1000).nullish(),
   note: z.string().trim().max(2000).nullish(),
 })
+
+/**
+ * Bài thi và điểm luôn gắn với một ngày cụ thể (ngày thi, ngày có điểm) — thiếu
+ * ngày thì không xếp được vào biểu đồ hay tính trung bình theo thời gian.
+ * Bài tập thì được để trống: nó chỉ mất quyền được nhắc.
+ */
+function assertDate(kind: string | undefined, date: string | null | undefined) {
+  if (kind && kind !== 'HOMEWORK' && !date) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Bài thi và điểm phải có ngày' })
+  }
+}
+
+/** Ảnh đính kèm: chỉ ảnh, mỗi tấm tối đa 3MB sau khi trình duyệt đã nén. */
+const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024
+const MAX_ATTACHMENTS_PER_RECORD = 6
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const
 
 export const studyRouter = router({
   /** Danh sách "con" mà người này được xem: phụ huynh → mọi con; con → chính mình. */
@@ -143,20 +162,37 @@ export const studyRouter = router({
     )
     .query(async ({ ctx, input }) => {
       await assertChild(ctx, input.childId)
+      const window = input.from || input.to
+        ? {
+            // bài tập không có hạn thì không rơi vào khoảng nào — vẫn phải hiện,
+            // nếu không con ghi xong rồi mở lại thấy mất bài
+            OR: [
+              { date: { ...(input.from ? { gte: input.from } : {}), ...(input.to ? { lte: input.to } : {}) } },
+              ...(input.kind === 'HOMEWORK' ? [{ date: null }] : []),
+            ],
+          }
+        : {}
       return db.studyRecord.findMany({
         where: {
           childId: input.childId,
           ...(input.kind ? { kind: input.kind } : {}),
-          ...(input.from || input.to ? { date: { ...(input.from ? { gte: input.from } : {}), ...(input.to ? { lte: input.to } : {}) } } : {}),
+          ...window,
           ...(input.pendingOnly ? { doneAt: null } : {}),
         },
-        orderBy: [{ date: input.kind === 'HOMEWORK' ? 'asc' : 'desc' }, { createdAt: 'desc' }],
+        orderBy: [
+          // bài chưa có hạn xuống cuối, đừng để nó chen lên đầu danh sách
+          { date: { sort: input.kind === 'HOMEWORK' ? 'asc' : 'desc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
+        // data của ảnh nặng nên không kéo về đây; client tải từng ảnh qua /study/anh/:id
+        include: { attachments: { select: { id: true, mime: true, width: true, height: true }, orderBy: { createdAt: 'asc' } } },
         take: 300,
       })
     }),
 
   recordCreate: protectedProcedure.input(recordInput).mutation(async ({ ctx, input }) => {
     await assertChild(ctx, input.childId)
+    assertDate(input.kind, input.date)
     const rec = await db.studyRecord.create({ data: input })
     if (rec.kind === 'HOMEWORK') await materializeHomework()
     return rec
@@ -166,6 +202,7 @@ export const studyRouter = router({
     .input(recordInput.partial().extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const rec = await ownRecord(ctx, input.id)
+      assertDate(input.kind ?? rec.kind, 'date' in input ? input.date : rec.date)
       const { id, childId: _c, ...data } = input
       const updated = await db.studyRecord.update({ where: { id }, data })
       if (rec.kind === 'HOMEWORK') {
@@ -181,6 +218,59 @@ export const studyRouter = router({
       await ownRecord(ctx, input.id)
       await clearHomeworkNotifications(input.id)
       await db.studyRecord.delete({ where: { id: input.id } })
+      return { ok: true }
+    }),
+
+  // ---------- ảnh đính kèm ----------
+
+  /**
+   * Thêm ảnh cho một bài tập. Nhận base64 qua tRPC thay vì multipart: ảnh đã
+   * được trình duyệt nén về ~1600px nên chỉ vài trăm KB, không đáng dựng thêm
+   * một đường upload riêng.
+   */
+  attachmentAdd: protectedProcedure
+    .input(
+      z.object({
+        recordId: z.string(),
+        mime: z.enum(ALLOWED_MIME),
+        /// nội dung ảnh, base64 (không có tiền tố data:)
+        data: z.string().min(1),
+        width: z.number().int().positive().nullish(),
+        height: z.number().int().positive().nullish(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ownRecord(ctx, input.recordId)
+      const count = await db.studyAttachment.count({ where: { recordId: input.recordId } })
+      if (count >= MAX_ATTACHMENTS_PER_RECORD) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Tối đa ${MAX_ATTACHMENTS_PER_RECORD} ảnh mỗi bài` })
+      }
+      const buf = Buffer.from(input.data, 'base64')
+      if (buf.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ảnh rỗng' })
+      if (buf.length > MAX_ATTACHMENT_BYTES) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ảnh quá lớn (tối đa 3MB)' })
+      }
+      const row = await db.studyAttachment.create({
+        data: {
+          recordId: input.recordId,
+          mime: input.mime,
+          size: buf.length,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          data: buf,
+        },
+        select: { id: true, mime: true, width: true, height: true },
+      })
+      return row
+    }),
+
+  attachmentRemove: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await db.studyAttachment.findUnique({ where: { id: input.id } })
+      if (!row) return { ok: true }
+      await ownRecord(ctx, row.recordId)
+      await db.studyAttachment.delete({ where: { id: input.id } })
       return { ok: true }
     }),
 
@@ -240,18 +330,21 @@ export const studyRouter = router({
         }),
       ])
 
-      const pending = homework.filter((h) => !h.doneAt && h.date >= today)
-      const overdue = homework.filter((h) => !h.doneAt && h.date < today)
+      // bài không có hạn nằm ở "chưa xong" chứ không bao giờ là "quá hạn"
+      const pending = homework.filter((h) => !h.doneAt && (!h.date || h.date >= today))
+      const overdue = homework.filter((h) => !h.doneAt && h.date && h.date < today)
       const doneThisWeek = homework.filter((h) => h.doneAt).length
 
       // điểm trung bình theo môn, quy về thang 10 để so được giữa các bài khác thang
       const bySubject = new Map<string, { sum: number; n: number; last: number }>()
       for (const s of scores) {
         const v = (s.score! / (s.maxScore ?? 10)) * 10
-        const cur = bySubject.get(s.subject) ?? { sum: 0, n: 0, last: v }
+        // môn có thể để trống — gom vào một nhóm chung thay vì bỏ điểm đi
+        const subject = s.subject ?? 'Chưa phân môn'
+        const cur = bySubject.get(subject) ?? { sum: 0, n: 0, last: v }
         cur.sum += v
         cur.n += 1
-        bySubject.set(s.subject, cur)
+        bySubject.set(subject, cur)
       }
 
       return {

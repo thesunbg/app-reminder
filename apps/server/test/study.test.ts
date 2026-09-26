@@ -171,3 +171,130 @@ describe('dashboard', () => {
     assert.equal(d.child.id, childId)
   })
 })
+
+// ---------- bài tập ghi nhanh: môn và hạn đều tuỳ chọn, kèm ảnh ----------
+
+describe('bài tập ghi nhanh', () => {
+  it('lưu được khi chỉ có nội dung — không môn, không hạn', async () => {
+    const caller = await callerAs(childId)
+    const rec = await caller.study.recordCreate({
+      childId, kind: 'HOMEWORK',
+      title: 'Làm nốt bài hình\ncâu b và c',
+    })
+    assert.equal(rec.subject, null)
+    assert.equal(rec.date, null)
+    assert.match(rec.title, /câu b và c/)
+  })
+
+  it('bài thi và điểm vẫn bắt buộc có ngày', async () => {
+    const caller = await callerAs(childId)
+    await assert.rejects(
+      caller.study.recordCreate({ childId, kind: 'EXAM', title: 'Kiểm tra 1 tiết' }),
+      /phải có ngày/,
+    )
+    await assert.rejects(
+      caller.study.recordCreate({ childId, kind: 'SCORE', title: 'Miệng', score: 9 }),
+      /phải có ngày/,
+    )
+  })
+
+  it('bài không có hạn thì KHÔNG sinh nhắc, nhưng vẫn nằm trong danh sách chưa xong', async () => {
+    const caller = await callerAs(childId)
+    const noDue = await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Không hạn' })
+    await caller.study.recordCreate({
+      childId, kind: 'HOMEWORK', title: 'Có hạn', date: addDays(vnToday(), 3),
+    })
+    await materializeHomework()
+
+    const notes = await db.notification.findMany({ where: { userId: childId, refTable: 'homework' } })
+    assert.ok(notes.length > 0, 'bài có hạn phải được nhắc')
+    assert.ok(
+      notes.every((n) => !n.refId.startsWith(`${noDue.id}:`)),
+      'bài không hạn không được sinh nhắc nào',
+    )
+
+    const list = await caller.study.records({ childId, kind: 'HOMEWORK', pendingOnly: true })
+    assert.ok(list.some((r) => r.id === noDue.id), 'bài không hạn vẫn phải hiện ở danh sách chưa xong')
+  })
+
+  it('lọc theo khoảng ngày vẫn giữ lại bài không hạn', async () => {
+    const caller = await callerAs(childId)
+    const noDue = await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Không hạn' })
+    const list = await caller.study.records({
+      childId, kind: 'HOMEWORK', from: addDays(vnToday(), -30), to: vnToday(),
+    })
+    assert.ok(list.some((r) => r.id === noDue.id))
+  })
+
+  it('bài không hạn xếp sau bài có hạn', async () => {
+    const caller = await callerAs(childId)
+    await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Không hạn' })
+    await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Có hạn', date: addDays(vnToday(), 2) })
+    const list = await caller.study.records({ childId, kind: 'HOMEWORK' })
+    assert.equal(list[0]!.title, 'Có hạn')
+    assert.equal(list.at(-1)!.title, 'Không hạn')
+  })
+
+  it('dashboard: bài không hạn là "chưa xong", không bao giờ là "quá hạn"', async () => {
+    const caller = await callerAs(parentId)
+    await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Không hạn' })
+    await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Trễ', date: addDays(vnToday(), -2) })
+    const d = await caller.study.dashboard({ childId })
+    assert.equal(d.homework.pending.filter((h) => h.title === 'Không hạn').length, 1)
+    assert.equal(d.homework.overdue.filter((h) => h.title === 'Không hạn').length, 0)
+    assert.equal(d.homework.overdue.filter((h) => h.title === 'Trễ').length, 1)
+  })
+})
+
+describe('ảnh đính kèm bài tập', () => {
+  // PNG 1x1 hợp lệ, đủ để kiểm đường đi của dữ liệu
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+  it('thêm ảnh rồi lấy lại qua records, dữ liệu ảnh không kéo về kèm danh sách', async () => {
+    const caller = await callerAs(childId)
+    const rec = await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Chép đề' })
+    const a = await caller.study.attachmentAdd({ recordId: rec.id, mime: 'image/png', data: PNG, width: 1, height: 1 })
+    assert.equal(a.mime, 'image/png')
+
+    const list = await caller.study.records({ childId, kind: 'HOMEWORK' })
+    const row = list.find((r) => r.id === rec.id)!
+    assert.equal(row.attachments.length, 1)
+    assert.equal(row.attachments[0]!.id, a.id)
+    assert.ok(!('data' in row.attachments[0]!), 'không kéo bytes ảnh về cùng danh sách')
+
+    // nhưng trong DB thì có đủ bytes
+    const stored = await db.studyAttachment.findUniqueOrThrow({ where: { id: a.id } })
+    assert.deepEqual(Buffer.from(stored.data), Buffer.from(PNG, 'base64'))
+    assert.equal(stored.size, Buffer.from(PNG, 'base64').length)
+  })
+
+  it('không đính được ảnh vào bài của con khác', async () => {
+    const mine = await callerAs(childId)
+    const rec = await mine.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Của tôi' })
+    const other = await callerAs(otherChildId)
+    await assert.rejects(
+      other.study.attachmentAdd({ recordId: rec.id, mime: 'image/png', data: PNG }),
+      /Chỉ xem được dữ liệu của mình/,
+    )
+  })
+
+  it('xoá bài thì ảnh đi theo', async () => {
+    const caller = await callerAs(childId)
+    const rec = await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Sẽ xoá' })
+    const a = await caller.study.attachmentAdd({ recordId: rec.id, mime: 'image/png', data: PNG })
+    await caller.study.recordRemove({ id: rec.id })
+    assert.equal(await db.studyAttachment.count({ where: { id: a.id } }), 0)
+  })
+
+  it('tối đa 6 ảnh mỗi bài', async () => {
+    const caller = await callerAs(childId)
+    const rec = await caller.study.recordCreate({ childId, kind: 'HOMEWORK', title: 'Nhiều ảnh' })
+    for (let i = 0; i < 6; i++) {
+      await caller.study.attachmentAdd({ recordId: rec.id, mime: 'image/png', data: PNG })
+    }
+    await assert.rejects(
+      caller.study.attachmentAdd({ recordId: rec.id, mime: 'image/png', data: PNG }),
+      /Tối đa 6 ảnh/,
+    )
+  })
+})

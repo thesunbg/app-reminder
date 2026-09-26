@@ -49,12 +49,17 @@ export default function Week() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ routine, days }) => (
+              {rows.map(({ routine, days, canEdit }) => (
                 <tr key={routine.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td className="sticky left-0 z-10 max-w-[180px] px-3 py-2" style={{ background: 'var(--surface)' }}>
                     <div className="flex items-center gap-2">
                       <span className="h-4 w-1 shrink-0 rounded-full" style={{ background: routine.color }} />
                       <span className="truncate font-medium">{routine.title}</span>
+                      {!canEdit && (
+                        <span className="shrink-0 text-xs" style={{ color: 'var(--muted)' }} title={`Việc của ${routine.owner.name}`}>
+                          · {routine.owner.name}
+                        </span>
+                      )}
                     </div>
                   </td>
                   {days.map((cell) => (
@@ -62,7 +67,7 @@ export default function Week() {
                       {cell.due ? (
                         <button
                           onClick={() => mark.mutate({ routineId: routine.id, date: cell.date, status: 'DONE' })}
-                          disabled={mark.isPending}
+                          disabled={mark.isPending || !canEdit}
                           aria-label={`${routine.title} ngày ${cell.date}`}
                           className="mx-auto flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-bold text-white"
                           style={
