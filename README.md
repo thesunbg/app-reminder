@@ -253,6 +253,10 @@ Production: **https://reminder.nguyenvando.com**
   để đối chiếu: [deploy/nginx-reminder.conf](deploy/nginx-reminder.conf)).
   Trước đây app chạy ở `202.92.6.172` và 143 chỉ proxy sang — gộp về một máy
   bỏ được một chặng mạng và một máy phải trông.
+- **Không còn OneShield trước mặt** (tắt proxy 26/09/2026): domain trỏ thẳng về
+  `202.92.6.143`, nên nginx tự lo cert riêng cho `reminder.nguyenvando.com`,
+  redirect 80→443, HTTP/2 và HSTS. Sửa vhost thì **comment phải ASCII không
+  dấu** — certbot 0.31 ở đó chạy Python 2 và chết với `UnicodeDecodeError`.
 - Trong container: Caddy serve PWA tĩnh + proxy `/trpc`, `/health`, `/export`,
   `/agent/*` → server. Scheduler chạy ngay trong tiến trình server nên không có
   service nào khác phải giữ sống.
