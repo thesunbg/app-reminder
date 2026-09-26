@@ -199,6 +199,9 @@ function SubjectBars({ rows }: { rows: { subject: string; avg: number; count: nu
 
 type ClassRow = RouterOutputs['study']['schedule'][number]
 
+/** Nhãn thứ cho câu hỏi xác nhận: WEEKDAYS[0] là Thứ 2. */
+const weekdayName = (wd: number) => WEEKDAYS[wd - 1] ?? `thứ ${wd}`
+
 function Schedule({ childId, childName }: { childId: string; childName: string }) {
   const utils = trpc.useUtils()
   const rows = trpc.study.schedule.useQuery({ childId })
@@ -243,7 +246,18 @@ function Schedule({ childId, childName }: { childId: string; childName: string }
                         <span className="font-medium">{c.subject}</span>
                         <span className="ml-1 tabular-nums text-xs" style={{ color: 'var(--muted)' }}>{c.startTime}–{c.endTime}{c.room ? ` · ${c.room}` : ''}</span>
                       </button>
-                      <button className="text-xs opacity-60 hover:opacity-100" aria-label="Xoá tiết" onClick={() => remove.mutate({ id: c.id })}>✕</button>
+                      <button
+                        className="text-xs opacity-60 hover:opacity-100"
+                        aria-label={`Xoá tiết ${c.subject}`}
+                        onClick={() => {
+                          const when = `${weekdayName(c.weekday)}, tiết ${c.period} (${c.startTime}–${c.endTime})`
+                          if (window.confirm(`Xoá tiết ${c.subject} — ${when} khỏi thời khoá biểu của ${childName}?`)) {
+                            remove.mutate({ id: c.id })
+                          }
+                        }}
+                      >
+                        ✕
+                      </button>
                     </li>
                   ))}
                 </ol>
@@ -447,7 +461,10 @@ function AttachmentPicker({ recordId, existing, queued, onQueue, onUnqueue, onEr
                 className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white"
                 style={{ background: 'var(--danger)' }}
                 disabled={removeAttachment.isPending}
-                onClick={() => removeAttachment.mutate({ id: a.id })}
+                onClick={() => {
+                  // ảnh đã lưu thì xoá là mất hẳn, không như ảnh đang chờ gửi
+                  if (window.confirm('Xoá ảnh này? Không lấy lại được.')) removeAttachment.mutate({ id: a.id })
+                }}
               >
                 ×
               </button>
@@ -674,7 +691,23 @@ function RecordForm({ childId, kind, initial, onDone, onRemove }: {
           Lưu
         </button>
         <button type="button" className="btn btn-ghost" onClick={onDone}>Huỷ</button>
-        {onRemove && <button type="button" className="btn btn-ghost ml-auto text-xs" style={{ color: 'var(--danger)' }} onClick={() => { if (window.confirm('Xoá mục này?')) onRemove() }}>Xoá</button>}
+        {onRemove && (
+          <button
+            type="button"
+            className="btn btn-ghost ml-auto text-xs"
+            style={{ color: 'var(--danger)' }}
+            onClick={() => {
+              const what = k === 'HOMEWORK' ? 'bài tập' : k === 'EXAM' ? 'bài thi' : 'điểm'
+              // nội dung bài tập có thể dài mấy dòng — cắt cho câu hỏi gọn
+              const name = title.trim().length > 60 ? `${title.trim().slice(0, 57)}…` : title.trim()
+              const imgs = (initial as Rec).attachments?.length ?? 0
+              const extra = imgs > 0 ? `\n${imgs} ảnh đính kèm cũng bị xoá theo.` : ''
+              if (window.confirm(`Xoá ${what} “${name}”?${extra}\nKhông khôi phục được.`)) onRemove()
+            }}
+          >
+            Xoá
+          </button>
+        )}
       </div>
     </form>
   )
