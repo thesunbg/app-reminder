@@ -180,7 +180,28 @@ như "floating date" để thứ trong tuần luôn khớp lịch VN.
 toán Hồ Ngọc Đức (UTC+7). **Đừng thay bằng thư viện lịch Trung Quốc**: chúng
 dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
 
-**Phân quyền.** Con chỉ thấy dữ liệu của mình; phụ huynh thấy cả nhà.
+**Phân quyền.** Hai trục tách rời nhau:
+
+- `role` (`PARENT` / `CHILD`) — vai trò trong nhà: con chỉ thấy dữ liệu của
+  mình, phụ huynh thấy cả nhà và nhận nhắc giỗ/sinh nhật.
+- `isAdmin` — **quyền trên tài khoản**: chỉ quản trị gia đình mới thêm, sửa
+  (tên, email, vai trò, ngày sinh, màu), tắt/bật, đặt lại mật khẩu và gỡ hẳn
+  thành viên. Phụ huynh còn lại vẫn xem được cả nhà nhưng không đụng vào tài
+  khoản người khác.
+
+Người **bootstrap gia đình** là quản trị. Migration `user_is_admin` gán cờ này
+cho phụ huynh được tạo sớm nhất của mỗi gia đình — thiếu bước đó thì sau khi
+deploy không ai quản lý được thành viên nữa.
+
+Quản trị không tự khoá mình ra ngoài được: không tự tắt tài khoản, không tự hạ
+xuống `CHILD`, không tự xoá.
+
+**Gỡ thành viên có hai mức.** *Tắt tài khoản* (`active: false`) cắt đăng nhập
+nhưng giữ nguyên nhật ký, ghi chú, lịch sử tick. *Gỡ hẳn* xoá luôn cả người lẫn
+dữ liệu (cascade) và **không khôi phục được ngoài backup hằng đêm** — vì vậy
+`removeMember` bắt gõ đúng tên để xác nhận, **kiểm ở server** chứ không chỉ ở
+giao diện, và giao diện hiện đúng số bản ghi sắp mất trước khi hỏi.
+
 Nhật ký của con mặc định riêng tư — xem lý do ở `docs/PLAN.md` mục 5.4.
 
 **Ghi chú.** Một loại duy nhất (`Note`) phục vụ cả ghi chú tự do, danh sách

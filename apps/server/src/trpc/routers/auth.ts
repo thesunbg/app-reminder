@@ -94,6 +94,9 @@ export const authRouter = router({
             email: input.email,
             passwordHash: await hashPassword(input.password),
             role: 'PARENT',
+            // người dựng gia đình là quản trị — nếu không thì sẽ không ai
+            // thêm được thành viên và hệ thống tự khoá mình lại
+            isAdmin: true,
             diaryPrivate: false,
           },
         })
@@ -153,9 +156,9 @@ export const authRouter = router({
 
   me: publicProcedure.query(async ({ ctx }) => {
     if (!ctx.user) return null
-    const { id, name, email, role, avatarColor, birthday, familyId, telegramChatId, totpEnabled } = ctx.user
+    const { id, name, email, role, isAdmin, avatarColor, birthday, familyId, telegramChatId, totpEnabled } = ctx.user
     return {
-      id, name, email, role, avatarColor, birthday, familyId,
+      id, name, email, role, isAdmin, avatarColor, birthday, familyId,
       familyName: ctx.session!.user.family.name,
       hasTelegram: Boolean(telegramChatId),
       totpEnabled,

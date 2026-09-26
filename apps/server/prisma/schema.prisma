@@ -80,6 +80,10 @@ model User {
   passwordHash String
   name         String
   role         Role     @default(PARENT)
+  /// Quản trị gia đình: người DUY NHẤT được thêm/sửa/xoá thành viên và đặt lại
+  /// mật khẩu cho người khác. Khác `role`: PARENT là vai trò trong nhà (xem báo
+  /// cáo của con, nhận nhắc giỗ), còn đây là quyền trên tài khoản.
+  isAdmin      Boolean  @default(false)
   birthday     String? // "YYYY-MM-DD"
   avatarColor  String   @default("#6366f1")
   // kênh nhắc

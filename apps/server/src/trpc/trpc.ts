@@ -39,3 +39,16 @@ export const parentProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx })
 })
+
+/**
+ * Quản trị tài khoản: thêm/sửa/xoá thành viên, đặt lại mật khẩu người khác.
+ *
+ * Hẹp hơn parentProcedure có chủ đích — phụ huynh còn lại vẫn xem được báo cáo
+ * của con và nhận nhắc nhở, nhưng không đụng được vào tài khoản của người khác.
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!ctx.user.isAdmin) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Chỉ quản trị gia đình mới thực hiện được' })
+  }
+  return next({ ctx })
+})

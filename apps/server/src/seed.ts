@@ -21,7 +21,7 @@ async function main() {
     update: {},
     create: {
       familyId: family.id, email: PARENT_EMAIL, name: 'Bố', role: 'PARENT',
-      passwordHash: hash, avatarColor: '#2563eb', diaryPrivate: false,
+      passwordHash: hash, avatarColor: '#2563eb', diaryPrivate: false, isAdmin: true,
     },
   })
   const child = await db.user.upsert({
