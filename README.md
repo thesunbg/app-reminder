@@ -238,7 +238,7 @@ Production: **https://reminder.nguyenvando.com**
 - Push lên `main` → GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml))
   chạy typecheck + test (Postgres riêng trong CI) → build image server/web đẩy lên
   `ghcr.io/thesunbg/app-reminder-*` gắn tag `latest` và `<sha>`.
-- **Deploy kiểu pull**: cron 2 phút/lần trên `202.92.6.172` chạy
+- **Deploy kiểu pull**: cron 2 phút/lần trên `202.92.6.143` chạy
   [deploy/autodeploy.sh](deploy/autodeploy.sh): `git reset --hard origin/main`
   (repo public, HTTPS) rồi chỉ `up -d` khi image `:<sha>` của HEAD đã có trên
   ghcr.io. Không có secret nào trên GitHub. Từ push tới chạy ≈ 4–6 phút.
@@ -247,8 +247,12 @@ Production: **https://reminder.nguyenvando.com**
 - Server **không build** image: kernel CentOS 7 + seccomp Docker 19.03 trả EPERM
   ngẫu nhiên khi `pnpm install`. Cũng vì thế container chạy `seccomp:unconfined`.
 - PR nào cũng chạy test — kể cả PR tạo từ Claude trên điện thoại.
-- `202.92.6.143` chỉ chạy nginx + certbot, proxy subdomain → `202.92.6.172:5599`
-  (`/etc/nginx/site-node/reminder.nguyenvando.com.conf`).
+- App và nginx **ở cùng máy `202.92.6.143`**. Web container bind
+  `127.0.0.1:5599`, không cổng nào của app lộ ra Internet; nginx + certbot lo
+  TLS và domain (`/etc/nginx/site-node/reminder.nguyenvando.com.conf`, bản sao
+  để đối chiếu: [deploy/nginx-reminder.conf](deploy/nginx-reminder.conf)).
+  Trước đây app chạy ở `202.92.6.172` và 143 chỉ proxy sang — gộp về một máy
+  bỏ được một chặng mạng và một máy phải trông.
 - Trong container: Caddy serve PWA tĩnh + proxy `/trpc`, `/health`, `/export`,
   `/agent/*` → server. Scheduler chạy ngay trong tiến trình server nên không có
   service nào khác phải giữ sống.
@@ -263,10 +267,10 @@ không đi qua git.
 Deploy tay khi cần (không muốn chờ cron):
 
 ```bash
-ssh -p 24700 root@202.92.6.172 /data/app-reminder/deploy/autodeploy.sh
+ssh -p 24700 root@202.92.6.143 /data/app-reminder/deploy/autodeploy.sh
 ```
 
-Cron backup trên 202.92.6.172:
+Cron backup trên 202.92.6.143:
 
 ```bash
 crontab -e

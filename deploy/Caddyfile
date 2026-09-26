@@ -1,4 +1,4 @@
-# Chạy sau nginx (202.92.6.143) — nginx lo TLS và domain, Caddy chỉ nghe HTTP.
+# Chạy sau nginx (cùng máy 202.92.6.143) — nginx lo TLS và domain, Caddy chỉ nghe HTTP.
 {
 	auto_https off
 }

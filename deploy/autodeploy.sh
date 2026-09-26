@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Auto-deploy kiểu PULL: chạy bằng cron trên 202.92.6.172, không cần secret
+# Auto-deploy kiểu PULL: chạy bằng cron trên 202.92.6.143, không cần secret
 # nào trên GitHub. Repo public → git pull qua HTTPS; image public trên ghcr.io.
 #
 #   */2 * * * * /data/app-reminder/deploy/autodeploy.sh >> /var/log/family-hub-deploy.log 2>&1
@@ -11,6 +11,7 @@
 set -euo pipefail
 # cron chạy với PATH tối giản, docker-compose nằm ở /usr/local/bin
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# 143 dùng docker-compose v2 (binary rời ở /usr/local/bin), Docker Engine 19.03.
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -43,6 +44,7 @@ fi
 docker image prune -f >/dev/null
 sleep 8
 PORT=$(grep -E '^APP_PORT=' .env | cut -d= -f2)
+# web bind 127.0.0.1 nên health check phải gọi đúng loopback
 if curl -fsS "http://127.0.0.1:${PORT:-5599}/health" >/dev/null; then
   echo "$(date '+%F %T') ✅ deployed ${SHA:0:7}"
 else

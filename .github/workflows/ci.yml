@@ -96,6 +96,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.svc }}
           cache-to: type=gha,scope=${{ matrix.svc }},mode=max
 
-  # Deploy không nằm ở đây: server 202.92.6.172 tự kéo về theo cron
+  # Deploy không nằm ở đây: server 202.92.6.143 tự kéo về theo cron
   # (deploy/autodeploy.sh) khi thấy image gắn tag commit HEAD đã có trên ghcr.io.
   # Nhờ vậy GitHub không cần giữ SSH key nào.
