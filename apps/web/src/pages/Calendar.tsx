@@ -15,6 +15,7 @@ const TYPE_META: Record<string, { icon: string; color: string; label: string }> 
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
+const dm = (d: string) => `${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}`
 /** 0 = thứ 2 … 6 = chủ nhật */
 const dow = (date: string) => (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7
 
@@ -198,9 +199,16 @@ function Grid({ leading, days, selected, today: t, onSelect, big, small, smallSt
               <span className="mt-1 flex flex-col gap-0.5">
                 {d.events.slice(0, 2).map((e) => {
                   const m = TYPE_META[e.type] ?? TYPE_META.OTHER!
+                  // ngày giữa/cuối của sự kiện dài: bỏ icon, thêm dấu nối để thấy nó tiếp diễn
+                  const cont = e.dayCount > 1 && e.dayIndex > 1
                   return (
-                    <span key={e.occurrenceId} className="truncate rounded px-1 text-[10px] leading-4 text-white" style={{ background: m.color }} title={e.title}>
-                      {m.icon} {e.title}
+                    <span
+                      key={e.occurrenceId}
+                      className="truncate rounded px-1 text-[10px] leading-4 text-white"
+                      style={{ background: m.color, opacity: cont ? 0.72 : 1 }}
+                      title={`${e.title}${e.dayCount > 1 ? ` (ngày ${e.dayIndex}/${e.dayCount})` : ''}`}
+                    >
+                      {cont ? '↳' : m.icon} {e.title}
                     </span>
                   )
                 })}
@@ -227,7 +235,7 @@ function DayDetail({ day }: { day: Day | undefined }) {
       </div>
       {day.events.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Không có sự kiện. <Link to="/su-kien" className="underline">Thêm giỗ / sinh nhật</Link>
+          Không có sự kiện. <Link to="/su-kien" className="underline">Thêm ngày lễ / sự kiện</Link>
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -237,9 +245,24 @@ function DayDetail({ day }: { day: Day | undefined }) {
               <li key={e.occurrenceId} className="flex items-center gap-3 text-sm">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base" style={{ background: `color-mix(in srgb, ${m.color} 18%, transparent)` }}>{m.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{e.title}</p>
+                  <p className="font-medium">
+                    {e.title}
+                    {e.dayCount > 1 && (
+                      <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--muted)' }}>
+                        ngày {e.dayIndex}/{e.dayCount}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                    {m.label} · {e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch'}{e.note ? ` · ${e.note}` : ''}
+                    {[
+                      m.label,
+                      e.endDate ? `${dm(e.startDate)} → ${dm(e.endDate)}` : null,
+                      e.startTime ? (e.endTime ? `${e.startTime}–${e.endTime}` : e.startTime) : null,
+                      e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch',
+                      e.note || null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                 </div>
               </li>

@@ -20,6 +20,9 @@ const baseInput = z.object({
   remindBeforeDays: z.array(z.number().int().min(0).max(60)).min(1).max(6).default([7, 3, 1, 0]),
   remindAtTime: timeSchema.default('08:00'),
   note: z.string().trim().max(500).nullish(),
+  // giờ sự kiện thật sự diễn ra, khác remindAtTime (giờ bắn nhắc)
+  startTime: timeSchema.nullish(),
+  endTime: timeSchema.nullish(),
 })
 
 const lunarInput = baseInput.extend({
@@ -34,6 +37,8 @@ const solarInput = baseInput.extend({
   // "MM-DD" khi lặp hàng năm, "YYYY-MM-DD" khi chỉ một lần
   solarDate: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/),
   yearly: z.boolean().default(true),
+  /// Ngày kết thúc cho sự kiện nhiều ngày; cùng dạng với solarDate.
+  endDate: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/).nullish(),
 })
 
 const createInput = z.discriminatedUnion('calendar', [lunarInput, solarInput])
@@ -51,32 +56,71 @@ const updateInput = z.discriminatedUnion('calendar', [
 function toData(input: z.infer<typeof createInput>) {
   if (input.calendar === 'LUNAR') {
     const { calendar, lunarDay, lunarMonth, lunarLeap, ...common } = input
-    return { ...common, calendar, lunarDay, lunarMonth, lunarLeap, solarDate: null, yearly: true }
+    return {
+      ...common, calendar, lunarDay, lunarMonth, lunarLeap,
+      solarDate: null, yearly: true, endDate: null,
+    }
   }
-  const { calendar, solarDate, yearly, ...common } = input
-  return { ...common, calendar, solarDate, yearly, lunarDay: null, lunarMonth: null, lunarLeap: false }
+  const { calendar, solarDate, yearly, endDate, ...common } = input
+  return {
+    ...common, calendar, solarDate, yearly,
+    // ngày kết thúc trùng ngày bắt đầu thì đây là sự kiện một ngày
+    endDate: endDate && endDate !== solarDate ? endDate : null,
+    lunarDay: null, lunarMonth: null, lunarLeap: false,
+  }
+}
+
+/**
+ * Occurrence nào CHẠM vào khoảng [from..to] — không chỉ những cái bắt đầu trong
+ * khoảng. Một chuyến đi 28/9 → 3/10 phải hiện cả ở lưới tháng 10.
+ * endDate = null nghĩa là sự kiện một ngày, khi đó chính solarDate phải nằm trong khoảng.
+ */
+function overlapWhere(from: string, to: string) {
+  return {
+    solarDate: { lte: to },
+    OR: [{ endDate: { gte: from } }, { endDate: null, solarDate: { gte: from } }],
+  }
 }
 
 async function calendarRange(familyId: string, from: string, to: string) {
   const rows = await db.eventOccurrence.findMany({
-    where: { solarDate: { gte: from, lte: to }, event: { familyId } },
+    where: { ...overlapWhere(from, to), event: { familyId } },
     include: { event: true },
     orderBy: { solarDate: 'asc' },
   })
-  const byDate = new Map<string, typeof rows>()
-  for (const r of rows) byDate.set(r.solarDate, [...(byDate.get(r.solarDate) ?? []), r])
+
+  // trải mỗi occurrence ra mọi ngày nó phủ, cắt theo khoảng đang xem
+  const byDate = new Map<string, Array<{ occ: typeof rows[number]; dayIndex: number; dayCount: number }>>()
+  for (const o of rows) {
+    const end = o.endDate ?? o.solarDate
+    const dayCount = diffDays(o.solarDate, end) + 1
+    const visibleFrom = o.solarDate < from ? from : o.solarDate
+    const visibleTo = end > to ? to : end
+    for (const date of dateRange(visibleFrom, visibleTo)) {
+      const entry = { occ: o, dayIndex: diffDays(o.solarDate, date) + 1, dayCount }
+      byDate.set(date, [...(byDate.get(date) ?? []), entry])
+    }
+  }
+
   return dateRange(from, to).map((date) => {
     const l = lunarOf(date)
     return {
       date,
       lunar: { day: l.day, month: l.month, year: l.year, leap: l.leap },
-      events: (byDate.get(date) ?? []).map((o) => ({
+      events: (byDate.get(date) ?? []).map(({ occ: o, dayIndex, dayCount }) => ({
         occurrenceId: o.id,
         id: o.event.id,
         title: o.event.title,
         type: o.event.type,
         calendar: o.event.calendar,
         note: o.event.note,
+        startDate: o.solarDate,
+        endDate: o.endDate,
+        startTime: o.event.startTime,
+        endTime: o.event.endTime,
+        /// ngày thứ mấy trong sự kiện (1-based) và tổng số ngày — để UI nói "ngày 2/3"
+        dayIndex,
+        dayCount,
       })),
     }
   })
@@ -88,6 +132,28 @@ async function assertInFamily(familyId: string, eventId: string) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Không tìm thấy sự kiện' })
   }
   return event
+}
+
+/**
+ * Ngày kết thúc phải sau ngày bắt đầu.
+ *
+ * Sự kiện lặp hàng năm được phép vắt qua giao thừa (28/12 → 2/1), khi đó chuỗi
+ * "MM-DD" của ngày kết thúc nhỏ hơn — hợp lệ. Sự kiện một lần thì không, vì nó
+ * mang năm cụ thể nên "nhỏ hơn" chỉ có thể là nhập sai.
+ */
+function assertRange(input: z.infer<typeof createInput>) {
+  if (input.calendar !== 'SOLAR' || !input.endDate) return
+  if (input.endDate === input.solarDate) return // sẽ được chuẩn hoá thành null
+  const sameShape = input.endDate.length === input.solarDate.length
+  if (!sameShape) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Ngày bắt đầu và ngày kết thúc phải cùng dạng (cùng có năm hoặc cùng không)',
+    })
+  }
+  if (!input.yearly && input.endDate < input.solarDate) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ngày kết thúc phải sau ngày bắt đầu' })
+  }
 }
 
 /** Chặn ngay lúc lưu nếu ngày âm không quy đổi được — đừng để phát hiện lúc chạy nền. */
@@ -113,12 +179,15 @@ export const eventRouter = router({
     })
     const today = vnToday()
     return events.map((e) => {
-      const next = e.occurrences.find((o) => o.solarDate >= today)
+      // sự kiện đang diễn ra (bắt đầu hôm qua, kết thúc mai) vẫn là lần tới gần nhất
+      const next = e.occurrences.find((o) => (o.endDate ?? o.solarDate) >= today)
       return {
         ...e,
         occurrences: undefined,
         nextDate: next?.solarDate ?? null,
+        nextEndDate: next?.endDate ?? null,
         daysUntil: next ? diffDays(today, next.solarDate) : null,
+        ongoing: next ? next.solarDate <= today : false,
         nextLunar: next && e.calendar === 'LUNAR' ? lunarOf(next.solarDate) : null,
       }
     })
@@ -131,10 +200,7 @@ export const eventRouter = router({
       const today = vnToday()
       const until = addDays(today, input.days)
       const rows = await db.eventOccurrence.findMany({
-        where: {
-          solarDate: { gte: today, lte: until },
-          event: { familyId: ctx.user.familyId },
-        },
+        where: { ...overlapWhere(today, until), event: { familyId: ctx.user.familyId } },
         orderBy: { solarDate: 'asc' },
         include: { event: true },
       })
@@ -142,7 +208,12 @@ export const eventRouter = router({
         id: o.id,
         eventId: o.eventId,
         solarDate: o.solarDate,
+        endDate: o.endDate,
+        // âm nếu sự kiện đã bắt đầu; dùng kèm `ongoing` chứ đừng in trực tiếp
         daysUntil: diffDays(today, o.solarDate),
+        ongoing: o.solarDate <= today,
+        dayIndex: o.solarDate <= today ? diffDays(o.solarDate, today) + 1 : 1,
+        dayCount: diffDays(o.solarDate, o.endDate ?? o.solarDate) + 1,
         lunar: o.event.calendar === 'LUNAR' ? lunarOf(o.solarDate) : null,
         event: o.event,
       }))
@@ -178,6 +249,7 @@ export const eventRouter = router({
 
   create: protectedProcedure.input(createInput).mutation(async ({ ctx, input }) => {
     assertResolvable(input)
+    assertRange(input)
     const created = await db.event.create({
       data: { ...toData(input), familyId: ctx.user.familyId },
     })
@@ -189,6 +261,7 @@ export const eventRouter = router({
     const { id, ...rest } = input
     await assertInFamily(ctx.user.familyId, id)
     assertResolvable(rest)
+    assertRange(rest)
     const updated = await db.event.update({ where: { id }, data: toData(rest) })
     // ngày có thể đã đổi -> xoá lịch cũ rồi sinh lại từ đầu
     await clearEventNotifications(id)

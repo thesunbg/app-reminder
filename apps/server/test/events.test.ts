@@ -10,6 +10,7 @@ import {
   materializeEvents,
   resolveLunarAnniversary,
   resolveOccurrence,
+  resolveOccurrenceEnd,
 } from '../src/notifications/events.js'
 
 const MARK = `ev-${Date.now()}`
@@ -286,5 +287,164 @@ describe('event.calendar / lunarCalendar', () => {
     const prev = await caller.event.lunarCalendar(m.prev)
     assert.equal(prev.to, addDays(m.from, -1))
     await assert.rejects(caller.event.lunarCalendar({ year: 2026, month: 3, leap: true }), /không tồn tại/)
+  })
+})
+
+// ---------- sự kiện nhiều ngày (chuyến đi, nghỉ lễ) ----------
+
+describe('sự kiện nhiều ngày', () => {
+  it('quy đổi ngày kết thúc: một lần giữ nguyên, hàng năm gắn năm, vắt giao thừa sang năm sau', async () => {
+    const once = await makeEvent({
+      calendar: 'SOLAR', title: 'Đi Mù Cang Chải', type: 'OTHER',
+      solarDate: '2026-10-03', endDate: '2026-10-04', yearly: false,
+      lunarDay: null, lunarMonth: null,
+    })
+    assert.equal(resolveOccurrenceEnd(once, 2026, '2026-10-03'), '2026-10-04')
+
+    const yearly = await makeEvent({
+      calendar: 'SOLAR', title: 'Nghỉ lễ', type: 'OTHER',
+      solarDate: '04-30', endDate: '05-01', yearly: true,
+      lunarDay: null, lunarMonth: null,
+    })
+    assert.equal(resolveOccurrenceEnd(yearly, 2027, '2027-04-30'), '2027-05-01')
+
+    // 28/12 → 2/1: ngày kết thúc thuộc năm sau
+    const newYear = await makeEvent({
+      calendar: 'SOLAR', title: 'Về quê ăn Tết', type: 'OTHER',
+      solarDate: '12-28', endDate: '01-02', yearly: true,
+      lunarDay: null, lunarMonth: null,
+    })
+    assert.equal(resolveOccurrenceEnd(newYear, 2026, '2026-12-28'), '2027-01-02')
+
+    // sự kiện một ngày và sự kiện âm lịch không có ngày kết thúc
+    const oneDay = await makeEvent({
+      calendar: 'SOLAR', title: 'Sinh nhật', solarDate: '06-12', yearly: true,
+      lunarDay: null, lunarMonth: null,
+    })
+    assert.equal(resolveOccurrenceEnd(oneDay, 2027, '2027-06-12'), null)
+    assert.equal(resolveOccurrenceEnd(await makeEvent({ endDate: '07-16' }), thisLunarYear, '2026-08-27'), null)
+  })
+
+  it('occurrence lưu cả ngày kết thúc', async () => {
+    const start = addDays(vnToday(), 12)
+    const end = addDays(start, 1)
+    const ev = await makeEvent({
+      calendar: 'SOLAR', title: 'Đi Mù Cang Chải', type: 'OTHER',
+      solarDate: start, endDate: end, yearly: false,
+      lunarDay: null, lunarMonth: null,
+    })
+    await materializeEventOccurrences()
+    const occ = await db.eventOccurrence.findFirstOrThrow({ where: { eventId: ev.id } })
+    assert.equal(occ.solarDate, start)
+    assert.equal(occ.endDate, end)
+  })
+
+  it('nhắc theo NGÀY BẮT ĐẦU, nội dung nói rõ cả khoảng', async () => {
+    const start = addDays(vnToday(), 10)
+    const end = addDays(start, 1)
+    const ev = await makeEvent({
+      calendar: 'SOLAR', title: 'Đi Mù Cang Chải', type: 'OTHER',
+      solarDate: start, endDate: end, yearly: false,
+      lunarDay: null, lunarMonth: null,
+      remindBeforeDays: [3, 0], remindAtTime: '08:00',
+      startTime: '05:30', endTime: '18:00',
+    })
+    await materializeEventOccurrences()
+    await materializeEvents()
+
+    const rows = await db.notification.findMany({
+      where: { userId: parentId, refId: eventRef(ev.id, start) },
+      orderBy: { fireAt: 'asc' },
+    })
+    assert.equal(rows.length, 2)
+    // mốc nhắc tính từ ngày bắt đầu, không phải ngày kết thúc
+    assert.equal(rows[0]!.fireAt.getTime(), vnDateTimeToUtc(addDays(start, -3), '08:00').getTime())
+    assert.equal(rows[1]!.fireAt.getTime(), vnDateTimeToUtc(start, '08:00').getTime())
+    // thân thông báo có khoảng ngày, giờ diễn ra và số ngày
+    const dm = (d: string) => `${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}`
+    assert.ok(rows[0]!.body.includes(`${dm(start)} → ${dm(end)}`), rows[0]!.body)
+    assert.ok(rows[0]!.body.includes('05:30–18:00'), rows[0]!.body)
+    assert.ok(rows[0]!.body.includes('2 ngày'), rows[0]!.body)
+    assert.match(rows[1]!.title, /bắt đầu hôm nay/)
+  })
+
+  it('lịch tháng hiện sự kiện ở MỌI ngày nó phủ, kèm ngày thứ mấy', async () => {
+    const caller = await callerAsParent()
+    const ev = await makeEvent({
+      calendar: 'SOLAR', title: 'Đi Mù Cang Chải', type: 'OTHER',
+      solarDate: '2026-10-03', endDate: '2026-10-05', yearly: false,
+      lunarDay: null, lunarMonth: null,
+    })
+    await materializeEventOccurrences()
+    const days = await caller.event.calendar({ from: '2026-10-01', to: '2026-10-31' })
+    const covered = days.filter((d) => d.events.some((e) => e.id === ev.id))
+    assert.deepEqual(covered.map((d) => d.date), ['2026-10-03', '2026-10-04', '2026-10-05'])
+    const mid = covered[1]!.events.find((e) => e.id === ev.id)!
+    assert.deepEqual([mid.dayIndex, mid.dayCount], [2, 3])
+    assert.equal(mid.startDate, '2026-10-03')
+    assert.equal(mid.endDate, '2026-10-05')
+  })
+
+  it('sự kiện vắt qua biên tháng vẫn hiện ở tháng sau, dayIndex tính từ ngày bắt đầu thật', async () => {
+    const caller = await callerAsParent()
+    const ev = await makeEvent({
+      calendar: 'SOLAR', title: 'Nghỉ dài', type: 'OTHER',
+      solarDate: '2026-09-29', endDate: '2026-10-02', yearly: false,
+      lunarDay: null, lunarMonth: null,
+    })
+    await materializeEventOccurrences()
+    const days = await caller.event.calendar({ from: '2026-10-01', to: '2026-10-31' })
+    const covered = days.filter((d) => d.events.some((e) => e.id === ev.id))
+    assert.deepEqual(covered.map((d) => d.date), ['2026-10-01', '2026-10-02'])
+    const first = covered[0]!.events.find((e) => e.id === ev.id)!
+    // 1/10 là ngày thứ 3 của sự kiện, dù nó là ô đầu tiên của khoảng đang xem
+    assert.deepEqual([first.dayIndex, first.dayCount], [3, 4])
+  })
+
+  it('upcoming: sự kiện đang diễn ra vẫn hiện, kèm ongoing và ngày thứ mấy', async () => {
+    const caller = await callerAsParent()
+    const start = addDays(vnToday(), -1)
+    const end = addDays(vnToday(), 1)
+    const ev = await makeEvent({
+      calendar: 'SOLAR', title: 'Đang đi Mù Cang Chải', type: 'OTHER',
+      solarDate: start, endDate: end, yearly: false,
+      lunarDay: null, lunarMonth: null,
+    })
+    await materializeEventOccurrences()
+    const rows = await caller.event.upcoming({ days: 30 })
+    const row = rows.find((r) => r.eventId === ev.id)
+    assert.ok(row, 'sự kiện đang diễn ra phải nằm trong upcoming')
+    assert.equal(row.ongoing, true)
+    assert.deepEqual([row.dayIndex, row.dayCount], [2, 3])
+
+    const list = await caller.event.list()
+    const item = list.find((e) => e.id === ev.id)!
+    assert.equal(item.ongoing, true)
+    assert.equal(item.nextDate, start)
+    assert.equal(item.nextEndDate, end)
+  })
+
+  it('từ chối ngày kết thúc trước ngày bắt đầu với sự kiện một lần, và hai dạng ngày lệch nhau', async () => {
+    const caller = await callerAsParent()
+    await assert.rejects(
+      caller.event.create({
+        calendar: 'SOLAR', title: 'Sai', solarDate: '2026-10-05', endDate: '2026-10-03',
+        yearly: false, remindBeforeDays: [0], remindAtTime: '08:00',
+      }),
+      /Ngày kết thúc phải sau/,
+    )
+    await assert.rejects(
+      caller.event.create({
+        calendar: 'SOLAR', title: 'Sai dạng', solarDate: '2026-10-05', endDate: '10-07',
+        yearly: false, remindBeforeDays: [0], remindAtTime: '08:00',
+      }),
+      /cùng dạng/,
+    )
+    // ngày kết thúc trùng ngày bắt đầu -> chuẩn hoá thành sự kiện một ngày
+    const same = await caller.event.create({
+      calendar: 'SOLAR', title: 'Một ngày', solarDate: '2026-10-05', endDate: '2026-10-05',
+      yearly: false, remindBeforeDays: [0], remindAtTime: '08:00',
+    })
+    assert.equal(same.endDate, null)
   })
 })

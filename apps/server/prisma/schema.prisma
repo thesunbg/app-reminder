@@ -244,6 +244,14 @@ model Event {
   // SOLAR: "MM-DD" cho lặp hàng năm, hoặc "YYYY-MM-DD" cho một lần
   solarDate  String?
   yearly     Boolean @default(true)
+  /// Ngày kết thúc của sự kiện trải nhiều ngày (chuyến đi, nghỉ lễ), cùng dạng
+  /// với solarDate. null = sự kiện gói trong một ngày. Chỉ dùng cho SOLAR:
+  /// giỗ và sinh nhật âm lịch không có khái niệm kéo dài.
+  endDate    String?
+  /// Giờ diễn ra theo giờ VN ("HH:mm"), tuỳ chọn. Khác remindAtTime — cái đó là
+  /// giờ BẮN NHẮC, còn đây là giờ sự kiện thật sự xảy ra.
+  startTime  String?
+  endTime    String?
 
   remindBeforeDays Int[]   @default([7, 3, 1, 0])
   remindAtTime     String  @default("08:00") // giờ VN bắn nhắc trong ngày
@@ -261,10 +269,15 @@ model EventOccurrence {
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   year    Int
-  solarDate String // "YYYY-MM-DD"
+  solarDate String // "YYYY-MM-DD" — ngày bắt đầu
+  /// Ngày kết thúc đã quy đổi cho năm này; null = sự kiện một ngày.
+  /// Có cột này thì truy vấn lịch chỉ cần một lần overlap, không phải tự suy ra
+  /// độ dài từ Event mỗi lần vẽ lưới.
+  endDate   String?
 
   @@unique([eventId, year])
   @@index([solarDate])
+  @@index([endDate])
 }
 
 // ---------- Nhóm 3: ghi chú (kiểu Google Keep) ----------

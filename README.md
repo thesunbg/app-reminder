@@ -9,7 +9,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 |---|---|---|
 | 0 | Monorepo, DB, auth, model gia đình | ✅ xong |
 | 1 | Việc định kỳ + checklist + thống kê + **engine nhắc + Telegram + Web Push** | ✅ xong |
-| 2 | Giỗ âm lịch / sinh nhật + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện | ✅ xong |
+| 2 | Giỗ âm lịch / sinh nhật / **sự kiện nhiều ngày có giờ** + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện | ✅ xong |
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
@@ -29,6 +29,21 @@ gửi** thay vì lúc sinh lịch — ngày chưa xảy ra thì chưa biết b�
 
 Nhắc sự kiện chỉ gửi cho thành viên **phụ huynh** — giỗ chạp và sinh nhật là
 việc người lớn chuẩn bị, không cần dựng con dậy lúc 8h sáng.
+
+Sự kiện dương lịch có hai dạng: **lặp hàng năm** (sinh nhật, lễ) và **một lần**
+(chuyến đi 3–4/10). Cả hai đều có thể **kéo dài nhiều ngày** và ghi **giờ diễn
+ra** (5:30–18:00) — giờ này khác `remindAtTime`, là giờ bắn thông báo. Sự kiện
+nhiều ngày:
+
+- nhắc theo **ngày bắt đầu** (trước 7/3/1 ngày rồi sáng ngày khởi hành), không
+  bắn thêm cho ngày giữa — chuyến 2 ngày mà nhắc 2 lần thì thành ồn;
+- hiện ở **mọi ngày nó phủ** trên lịch tháng, ngày tiếp diễn có dấu `↳` và nhãn
+  "ngày 2/3"; sự kiện vắt qua biên tháng vẫn hiện đúng ở tháng sau;
+- còn nằm trong "Sắp tới" khi **đang diễn ra** (bắt đầu hôm qua, kết thúc mai);
+- lặp hàng năm thì được vắt qua giao thừa (28/12 → 2/1), khi đó ngày kết thúc
+  được tính sang năm sau.
+
+Giỗ âm lịch không có ngày kết thúc: một ngày giỗ là một ngày.
 
 Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
 native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
