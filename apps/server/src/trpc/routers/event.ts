@@ -135,6 +135,19 @@ async function assertInFamily(familyId: string, eventId: string) {
 }
 
 /**
+ * Sinh nhật tự sinh từ ngày sinh thành viên thì sửa ở Cài đặt, không sửa ở đây.
+ * Cho sửa cả hai chỗ thì hai nơi sẽ lệch nhau ngay lần đầu ai đó sửa nhầm chỗ.
+ */
+function assertNotBirthday(event: { birthdayUserId: string | null }) {
+  if (event.birthdayUserId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Đây là sinh nhật lấy từ hồ sơ thành viên — sửa ngày sinh trong Cài đặt → Gia đình',
+    })
+  }
+}
+
+/**
  * Ngày kết thúc phải sau ngày bắt đầu.
  *
  * Sự kiện lặp hàng năm được phép vắt qua giao thừa (28/12 → 2/1), khi đó chuỗi
@@ -259,7 +272,7 @@ export const eventRouter = router({
 
   update: protectedProcedure.input(updateInput).mutation(async ({ ctx, input }) => {
     const { id, ...rest } = input
-    await assertInFamily(ctx.user.familyId, id)
+    assertNotBirthday(await assertInFamily(ctx.user.familyId, id))
     assertResolvable(rest)
     assertRange(rest)
     const updated = await db.event.update({ where: { id }, data: toData(rest) })
@@ -273,7 +286,7 @@ export const eventRouter = router({
   remove: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await assertInFamily(ctx.user.familyId, input.id)
+      assertNotBirthday(await assertInFamily(ctx.user.familyId, input.id))
       await clearEventNotifications(input.id)
       await db.event.delete({ where: { id: input.id } })
       return { ok: true }

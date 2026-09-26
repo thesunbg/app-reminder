@@ -233,9 +233,19 @@ function DayDetail({ day }: { day: Day | undefined }) {
           {l.day}/{l.month}{l.leap ? ' (nhuận)' : ''} âm lịch · năm {l.year}
         </p>
       </div>
+
+      {/* Mang sẵn ngày đang chọn sang trang Sự kiện: bấm thêm từ ô ngày 3/10 thì
+          form phải mở ra với 3/10 điền sẵn, không bắt gõ lại. */}
+      <Link
+        to={`/su-kien?ngay=${day.date}`}
+        className="btn btn-primary mb-3 inline-flex !py-1.5 text-xs"
+      >
+        + Thêm sự kiện ngày {Number(day.date.slice(8, 10))}/{Number(day.date.slice(5, 7))}
+      </Link>
+
       {day.events.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Không có sự kiện. <Link to="/su-kien" className="underline">Thêm ngày lễ / sự kiện</Link>
+          Chưa có sự kiện nào trong ngày này.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">

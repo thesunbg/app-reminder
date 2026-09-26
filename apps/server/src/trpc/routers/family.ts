@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db } from '../../db.js'
 import { hashPassword } from '../../lib/password.js'
 import { invalidateAllSessions } from '../../lib/session.js'
+import { syncBirthdayEvent } from '../../notifications/birthday.js'
 import { adminProcedure, protectedProcedure, router } from '../trpc.js'
 
 /** Thành viên phải thuộc đúng gia đình của người đang thao tác. */
@@ -43,7 +44,7 @@ export const familyRouter = router({
       const taken = await db.user.findUnique({ where: { email: input.email } })
       if (taken) throw new TRPCError({ code: 'CONFLICT', message: 'Email đã được dùng' })
       const { password, ...rest } = input
-      return db.user.create({
+      const created = await db.user.create({
         data: {
           ...rest,
           familyId: ctx.user.familyId,
@@ -53,6 +54,9 @@ export const familyRouter = router({
         },
         select: { id: true, name: true, role: true },
       })
+      // khai ngày sinh lúc tạo là sinh nhật lên lịch ngay
+      await syncBirthdayEvent(created.id)
+      return created
     }),
 
   updateMember: adminProcedure
@@ -91,6 +95,10 @@ export const familyRouter = router({
       // đổi email hoặc tắt tài khoản thì phiên đang mở phải bị cắt
       if (data.active === false || (data.email && data.email !== target.email)) {
         await invalidateAllSessions(id)
+      }
+      // ngày sinh, tên hay trạng thái đổi -> sự kiện sinh nhật phải theo kịp
+      if (data.birthday !== undefined || data.name !== undefined || data.active !== undefined) {
+        await syncBirthdayEvent(id)
       }
       return updated
     }),

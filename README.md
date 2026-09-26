@@ -45,6 +45,19 @@ nhiều ngày:
 
 Giỗ âm lịch không có ngày kết thúc: một ngày giỗ là một ngày.
 
+**Dương lịch là mặc định** ở form thêm sự kiện — phần lớn thứ người ta thêm
+(chuyến đi, lịch hẹn, sinh nhật) đều theo dương; âm lịch để dành cho giỗ chạp.
+Bấm "+ Thêm sự kiện ngày 3/10" ngay trong ô ngày ở trang Lịch thì form mở ra với
+ngày đó điền sẵn và ở chế độ "một lần" (`/su-kien?ngay=YYYY-MM-DD`).
+
+**Sinh nhật đi thẳng từ hồ sơ thành viên.** Khai `birthday` trong Cài đặt →
+Gia đình là có ngay một `Event` gắn với người đó qua `birthdayUserId` (một
+người tối đa một cái), nên nó dùng chung toàn bộ engine đã có: hiện trên lịch
+tháng, nhắc trước 7 ngày / 1 ngày / đúng ngày. Đổi tên hay đổi ngày sinh thì sự
+kiện theo kịp; xoá ngày sinh, tắt hoặc gỡ tài khoản thì sự kiện biến mất.
+Sự kiện loại này **không sửa hay xoá được ở trang Sự kiện** — cho sửa cả hai
+chỗ thì hai nơi sẽ lệch nhau ngay lần đầu ai đó sửa nhầm chỗ.
+
 Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
 native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
 vẫn chạy. Kênh được tính lại lúc gửi chứ không chốt lúc sinh lịch — xem phần

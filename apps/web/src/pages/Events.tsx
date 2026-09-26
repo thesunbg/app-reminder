@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Card, EmptyState, ErrorNote, Spinner } from '@/components/ui'
 import { fullDate, weekdayShort } from '@/lib/format'
 import { trpc } from '@/lib/trpc'
@@ -42,7 +43,10 @@ export default function Events() {
   const utils = trpc.useUtils()
   const list = trpc.event.list.useQuery()
   const upcoming = trpc.event.upcoming.useQuery({ days: 180 })
-  const [open, setOpen] = useState(false)
+  // Đi từ lịch sang ("+ Thêm sự kiện ngày 3/10") thì mở sẵn form với ngày đó.
+  const [params, setParams] = useSearchParams()
+  const fromCalendar = params.get('ngay')
+  const [open, setOpen] = useState(Boolean(fromCalendar))
 
   const remove = trpc.event.remove.useMutation({
     onSuccess: () => {
@@ -54,6 +58,8 @@ export default function Events() {
 
   const refresh = () => {
     setOpen(false)
+    // xoá tham số đi, nếu không bấm "+ Thêm" lần sau lại nhảy về ngày cũ
+    if (fromCalendar) setParams({}, { replace: true })
     void utils.event.list.invalidate()
     void utils.event.upcoming.invalidate()
     void utils.notify.upcomingCount.invalidate()
@@ -70,7 +76,7 @@ export default function Events() {
         </button>
       </div>
 
-      {open && <EventForm onDone={refresh} />}
+      {open && <EventForm key={fromCalendar ?? 'moi'} presetDate={fromCalendar} onDone={refresh} />}
 
       {(list.isLoading || upcoming.isLoading) && <Spinner />}
 
@@ -154,17 +160,24 @@ export default function Events() {
                       : ` · tới: ${fullDate(e.nextDate)}`)}
                 </p>
               </div>
-              <button
-                className="btn btn-ghost !px-2.5 !py-1.5 text-xs"
-                onClick={() => {
-                  if (confirm(`Xoá "${e.title}"? Các nhắc nhở của nó cũng bị xoá.`)) {
-                    remove.mutate({ id: e.id })
-                  }
-                }}
-                disabled={remove.isPending}
-              >
-                Xoá
-              </button>
+              {e.birthdayUserId ? (
+                // sinh nhật lấy từ hồ sơ thành viên: sửa ở Cài đặt, không sửa ở đây
+                <Link to="/cai-dat" className="shrink-0 text-xs underline" style={{ color: 'var(--muted)' }}>
+                  từ ngày sinh
+                </Link>
+              ) : (
+                <button
+                  className="btn btn-ghost !px-2.5 !py-1.5 text-xs"
+                  onClick={() => {
+                    if (confirm(`Xoá "${e.title}"? Các nhắc nhở của nó cũng bị xoá.`)) {
+                      remove.mutate({ id: e.id })
+                    }
+                  }}
+                  disabled={remove.isPending}
+                >
+                  Xoá
+                </button>
+              )}
             </li>
           )
         })}
@@ -181,18 +194,21 @@ export default function Events() {
   )
 }
 
-function EventForm({ onDone }: { onDone: () => void }) {
-  const [calendar, setCalendar] = useState<Calendar>('LUNAR')
-  const [type, setType] = useState<EventType>('DEATH_ANNIVERSARY')
+function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone: () => void }) {
+  // Dương lịch là mặc định: phần lớn thứ người ta thêm (chuyến đi, lịch hẹn,
+  // sinh nhật) đều theo dương. Âm lịch chỉ dành cho giỗ chạp.
+  const [calendar, setCalendar] = useState<Calendar>('SOLAR')
+  const [type, setType] = useState<EventType>('OTHER')
   const [title, setTitle] = useState('')
   const [note, setNote] = useState('')
   const [lunarDay, setLunarDay] = useState(15)
   const [lunarMonth, setLunarMonth] = useState(7)
   const [lunarLeap, setLunarLeap] = useState(false)
-  const [solarDate, setSolarDate] = useState('')
+  const [solarDate, setSolarDate] = useState(presetDate ?? '')
   const [endDate, setEndDate] = useState('')
   /** true = lặp hàng năm (sinh nhật, lễ); false = một lần, có năm cụ thể (chuyến đi) */
-  const [yearly, setYearly] = useState(true)
+  // chọn một ngày cụ thể trên lịch thì gần như chắc chắn là việc một lần
+  const [yearly, setYearly] = useState(!presetDate)
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [remindBeforeDays, setRemind] = useState<number[]>([7, 3, 1, 0])
@@ -238,7 +254,7 @@ function EventForm({ onDone }: { onDone: () => void }) {
   return (
     <Card className="mb-4 flex flex-col gap-3 p-4">
       <div className="flex gap-1 rounded-xl p-1" style={{ background: 'var(--surface-2)' }}>
-        {(['LUNAR', 'SOLAR'] as const).map((c) => (
+        {(['SOLAR', 'LUNAR'] as const).map((c) => (
           <button
             key={c}
             onClick={() => setCalendar(c)}

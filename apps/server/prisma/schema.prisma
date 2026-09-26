@@ -123,6 +123,8 @@ model User {
   studyRecords  StudyRecord[]
   agentDevices  AgentDevice[]
   screenReports ScreenReport[]
+  /// sự kiện sinh nhật tự sinh từ `birthday` ở trên
+  birthdayEvent Event?         @relation("BirthdayEvent")
 
   @@index([familyId])
 }
@@ -261,6 +263,13 @@ model Event {
   remindAtTime     String  @default("08:00") // giờ VN bắn nhắc trong ngày
   note             String?
   createdAt        DateTime @default(now())
+
+  /// Sinh nhật tự sinh từ `User.birthday` của thành viên này. Khai báo ngày
+  /// sinh trong Cài đặt là sự kiện xuất hiện trên lịch ngay, không phải gõ
+  /// lại lần nữa ở trang Sự kiện. Mỗi người tối đa một sự kiện như vậy; sửa
+  /// hay xoá thì sửa ngày sinh chứ không sửa sự kiện.
+  birthdayUserId String? @unique
+  birthdayUser   User?   @relation("BirthdayEvent", fields: [birthdayUserId], references: [id], onDelete: Cascade)
 
   occurrences EventOccurrence[]
 
