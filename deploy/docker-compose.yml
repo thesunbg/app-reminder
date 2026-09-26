@@ -5,8 +5,11 @@
 # kernel 3.10 + seccomp Docker 19.03 trả EPERM ngẫu nhiên khi pnpm install.
 # Vì cùng lý do, server/web chạy seccomp:unconfined.
 # Máy dev trên macOS chạy Postgres trực tiếp qua brew, không cần file này.
-# Không khai báo `version:` — docker-compose v2 trên 143 bỏ qua nó và chỉ kêu
-# obsolete; 143 không còn compose v1 nào cần tới nó.
+# GIỮ `version: '2.4'`: docker-compose v2 (trên 143) chỉ kêu "obsolete" rồi bỏ
+# qua, nhưng compose v1 mà thiếu nó thì đọc file theo format v1 đời đầu — coi
+# `services` là tên một service — và không quản được stack nữa. Bỏ dòng này đã
+# làm đúng như vậy với 202.92.6.172 một lần rồi.
+version: '2.4'
 
 services:
   db:

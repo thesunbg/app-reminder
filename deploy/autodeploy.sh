@@ -11,7 +11,7 @@
 set -euo pipefail
 # cron chạy với PATH tối giản, docker-compose nằm ở /usr/local/bin
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-# 143 dùng docker-compose v2 (binary rời ở /usr/local/bin), Docker Engine 19.03.
+# 143 dùng docker-compose v2 (binary rời ở /usr/local/bin) + Docker Engine 26.
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
