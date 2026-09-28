@@ -10,6 +10,9 @@ const KIND_LABEL: Record<string, string> = {
   NOTE_AHEAD: 'Ghi chú sắp đến hạn',
   NOTE_DUE: 'Ghi chú đến hạn',
   DAILY_DIGEST: 'Tổng kết cuối ngày',
+  WEEKLY_DIGEST: 'Tổng kết tuần',
+  HOMEWORK_DUE: 'Bài tập đến hạn',
+  CLASS_TOMORROW: 'Lịch học ngày mai',
 }
 
 const STATUS: Record<string, { label: string; color: string }> = {

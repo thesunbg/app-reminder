@@ -135,6 +135,11 @@ Nguyên tắc: **mọi thứ cần nhắc đều đẻ ra dòng trong `notificat
 - Tháng nhuận: ngày giỗ rơi vào tháng nhuận → cần chính sách rõ (thường cúng theo tháng thường).
 - Ngày 30 âm: có tháng chỉ 29 ngày → fallback về ngày 29.
 - Chạy job mỗi đầu năm dương lịch để sinh `event_occurrence` cho 2 năm tới.
+- **Lễ tết Việt Nam** (đã làm, `lib/holidays.ts`): danh mục dựng sẵn trong mã
+  nguồn chứ không seed vào `event` — lễ là của chung, không nhà nào sửa, và
+  quy đổi tại chỗ thì không cần cache cũng không cần migration khi thêm lễ.
+  Dùng chung `resolveLunarAnniversary` với ngày giỗ nên hai quy ước ở trên
+  (tháng nhuận, ngày 30) áp dụng luôn cho Tất niên "30 tháng Chạp".
 
 ---
 

@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { StreakFlame } from '@/components/Streaks'
 import { Avatar, EmptyState, Spinner } from '@/components/ui'
 import { addDays, fullDate, minutesLabel, nowVnTime, relativeDay, today } from '@/lib/format'
+import { holidayMeta, lunarLabel } from '@/lib/holidays'
+import { enqueueMark, isOnline } from '@/lib/offline'
 import { trpc } from '@/lib/trpc'
 
 type Status = 'DONE' | 'PARTIAL' | 'SKIPPED'
@@ -11,14 +14,48 @@ export default function Today() {
   const utils = trpc.useUtils()
   const day = trpc.routine.day.useQuery({ date })
   const me = trpc.auth.me.useQuery()
+  // chuỗi liên tiếp: một truy vấn cho cả trang, ghép theo routineId ở client
+  const streaks = trpc.stats.streaks.useQuery()
+  const streakOf = new Map((streaks.data ?? []).map((s) => [s.routineId, s]))
 
   const mark = trpc.routine.mark.useMutation({
     onSuccess: () => {
       void utils.routine.day.invalidate()
-      void utils.stats.summary.invalidate()
+      void utils.stats.invalidate()
       void utils.routine.week.invalidate()
     },
   })
+
+  /**
+   * Tick khi mất mạng: xếp hàng rồi vẽ ngay kết quả vào cache, để con tick
+   * xong thấy dấu ✓ chứ không thấy một lỗi mạng. Hàng đợi được gửi lại khi có
+   * mạng (useOutboxFlush ở App).
+   */
+  const markTask = (routineId: string, status: Status) => {
+    if (isOnline()) {
+      mark.mutate({ routineId, date, status })
+      return
+    }
+    enqueueMark({ routineId, date, status })
+    utils.routine.day.setData({ date }, (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        items: old.items.map((it) =>
+          it.routine.id !== routineId
+            ? it
+            : {
+                ...it,
+                // bấm lại đúng trạng thái đang có = bỏ tick, y như server làm
+                log:
+                  it.log?.status === status
+                    ? null
+                    : ({ ...(it.log ?? {}), status, date, routineId } as typeof it.log),
+              },
+        ),
+      }
+    })
+  }
 
   const items = day.data?.items ?? []
   const done = items.filter((i) => i.log?.status === 'DONE').length
@@ -40,6 +77,8 @@ export default function Today() {
           <button className="btn btn-ghost !px-3 text-xs" onClick={() => setDate(today())}>Hôm nay</button>
         )}
       </header>
+
+      <HolidayBanner date={date} />
 
       {items.length > 0 && (
         <div className="card mb-4 flex items-center gap-4 px-4 py-3">
@@ -84,7 +123,7 @@ export default function Today() {
               }
             >
               <button
-                onClick={() => mark.mutate({ routineId: routine.id, date, status: 'DONE' })}
+                onClick={() => markTask(routine.id, 'DONE')}
                 disabled={pending || !canEdit}
                 aria-label={
                   lockedBy
@@ -109,7 +148,13 @@ export default function Today() {
               <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: routine.color }} />
 
               <div className="min-w-0 flex-1">
-                <p className={`truncate font-semibold ${status === 'DONE' ? 'line-through' : ''}`}>{routine.title}</p>
+                <p className={`flex items-center gap-1.5 truncate font-semibold ${status === 'DONE' ? 'line-through' : ''}`}>
+                  <span className="truncate">{routine.title}</span>
+                  {(() => {
+                    const s = streakOf.get(routine.id)
+                    return s ? <StreakFlame streak={s} /> : null
+                  })()}
+                </p>
                 <p className="flex items-center gap-1.5 text-xs" style={{ color: overdue ? 'var(--warn)' : 'var(--muted)' }}>
                   <span className="tabular-nums">{routine.timeOfDay}</span>
                   <span>·</span>
@@ -125,14 +170,63 @@ export default function Today() {
 
               {canEdit && (
                 <div className="flex gap-1">
-                  <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'PARTIAL' })} disabled={pending}>½</MiniBtn>
-                  <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'SKIPPED' })} disabled={pending}>–</MiniBtn>
+                  <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => markTask(routine.id, 'PARTIAL')} disabled={pending}>½</MiniBtn>
+                  <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => markTask(routine.id, 'SKIPPED')} disabled={pending}>–</MiniBtn>
                 </div>
               )}
             </li>
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * Hôm nay có phải ngày lễ không. Chỉ hiện khi CÓ lễ — ngày thường thì màn hình
+ * Hôm nay phải để dành cho việc phải làm.
+ */
+function HolidayBanner({ date }: { date: string }) {
+  const q = trpc.holiday.on.useQuery({ date })
+  const rows = q.data ?? []
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mb-4 flex flex-col gap-2">
+      {rows.map((h) => {
+        const meta = holidayMeta(h.category)
+        return (
+          <div
+            key={h.id}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+            style={{
+              background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
+            }}
+          >
+            <span className="text-xl">{meta.icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold" style={{ color: meta.color }}>
+                {h.title}
+                {h.dayCount > 1 && (
+                  <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--muted)' }}>
+                    ngày {h.dayIndex}/{h.dayCount}
+                  </span>
+                )}
+              </p>
+              <p className="truncate text-xs" style={{ color: 'var(--muted)' }}>
+                {[
+                  h.dayOff ? 'được nghỉ' : meta.label,
+                  h.calendar === 'LUNAR' ? lunarLabel(h.lunar) : null,
+                  h.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, it } from 'node:test'
 import { db } from '../src/db.js'
-import { addDays, vnDateTimeToUtc, vnToday } from '../src/lib/time.js'
+import { addDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../src/lib/time.js'
 import {
   cancelRoutineNotifications,
   materializeRoutines,
@@ -235,6 +235,55 @@ describe('dispatch', () => {
     assert.ok(after.error)
 
     await db.user.update({ where: { id: userId }, data: { telegramChatId: '123456' } })
+    await db.routine.delete({ where: { id: r.id } })
+  })
+
+  it('thông báo rơi đúng giờ yên lặng thì bị huỷ lúc GỬI, không chỉ lúc sinh', async () => {
+    // Ca thật: đặt giờ yên lặng hôm nay, trong khi kho nhắc đã sinh sẵn tới 60
+    // ngày với giờ chốt từ trước. Không kiểm lại lúc gửi thì chúng vẫn nổ.
+    const r = await makeRoutine()
+    const now = new Date()
+    const nowVn = vnTimeOf(now)
+    const before = vnTimeOf(new Date(now.getTime() - 30 * 60_000))
+    const after30 = vnTimeOf(new Date(now.getTime() + 30 * 60_000))
+    await db.user.update({ where: { id: userId }, data: { quietFrom: before, quietTo: after30 } })
+
+    const n = await db.notification.create({
+      data: {
+        userId, kind: 'ROUTINE_DUE', refTable: 'routine', refId: routineRef(r.id, vnToday()),
+        title: 'x', body: 'y', fireAt: new Date(now.getTime() - 1000), channels: ['telegram'],
+      },
+    })
+
+    const res = await dispatchDue(now)
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } })
+    assert.equal(row.status, 'CANCELLED', `${nowVn} nằm trong ${before}–${after30} nên không được gửi`)
+    assert.match(row.error ?? '', /yên lặng/)
+    assert.ok(res.cancelled >= 1)
+
+    await db.user.update({ where: { id: userId }, data: { quietFrom: null, quietTo: null } })
+    await db.routine.delete({ where: { id: r.id } })
+  })
+
+  it('ngoài giờ yên lặng thì vẫn gửi bình thường', async () => {
+    const r = await makeRoutine()
+    const now = new Date()
+    // khoảng yên lặng nằm hẳn ở chỗ khác trong ngày
+    const from = vnTimeOf(new Date(now.getTime() + 3 * 3_600_000))
+    const to = vnTimeOf(new Date(now.getTime() + 5 * 3_600_000))
+    await db.user.update({ where: { id: userId }, data: { quietFrom: from, quietTo: to } })
+
+    const n = await db.notification.create({
+      data: {
+        userId, kind: 'ROUTINE_DUE', refTable: 'routine', refId: routineRef(r.id, vnToday()),
+        title: 'x', body: 'y', fireAt: new Date(now.getTime() - 1000), channels: ['webpush'],
+      },
+    })
+    await dispatchDue(now)
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } })
+    assert.notEqual(row.status, 'CANCELLED')
+
+    await db.user.update({ where: { id: userId }, data: { quietFrom: null, quietTo: null } })
     await db.routine.delete({ where: { id: r.id } })
   })
 

@@ -9,7 +9,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 |---|---|---|
 | 0 | Monorepo, DB, auth, model gia đình | ✅ xong |
 | 1 | Việc định kỳ + checklist + thống kê + **engine nhắc + Telegram + Web Push** | ✅ xong |
-| 2 | Giỗ âm lịch / sinh nhật / **sự kiện nhiều ngày có giờ** + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện | ✅ xong |
+| 2 | Giỗ âm lịch / sinh nhật / **sự kiện nhiều ngày có giờ** + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện; **lễ tết Việt Nam dựng sẵn** | ✅ xong |
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
@@ -18,14 +18,25 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 6 | Nhập bằng giọng nói + LLM | ❌ bỏ — chủ nhà quyết định không cần AI, chỉ cần nhắc theo lịch |
 | 7 | Push native (FCM) + vỏ Capacitor + local notification | ✅ code xong, **chưa build app lần nào** |
 | 8 | Agent máy tính: thời lượng dùng app, nhật ký tự động từ máy | ✅ xong |
+| 9 | **Tick việc trong Telegram**, mùng 1/rằm, lịch .ics, chuỗi ngày + huy hiệu | ✅ xong |
+| 10 | **Sổ sức khoẻ**, tìm kiếm toàn cục, nhắc thời khoá biểu, tổng kết tuần, offline | ✅ xong |
 
 Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ngày) / 60 ngày
 (giỗ, sinh nhật), gửi qua Telegram và/hoặc Web Push, tự huỷ khi bạn đã tick
 xong, tự thử lại khi gửi hỏng.
 
 Có thêm tổng kết cuối ngày (tuỳ chọn, tự đặt giờ): điểm lại hôm nay làm được
-gì và nhắc viết nhật ký. Đây là loại thông báo duy nhất có nội dung tính **lúc
-gửi** thay vì lúc sinh lịch — ngày chưa xảy ra thì chưa biết bạn làm được gì.
+gì và nhắc viết nhật ký. Cùng với **tổng kết tuần** (tối chủ nhật, mặc định
+tắt), đây là hai loại thông báo có nội dung tính **lúc gửi** thay vì lúc sinh
+lịch — ngày/tuần chưa xảy ra thì chưa biết làm được gì. Tổng kết tuần trả lời
+câu phụ huynh thật sự hỏi: tuần này ai đuối, bài nào còn nợ, tuần tới có gì
+phải chuẩn bị; con chỉ thấy phần của mình, đúng quyền xem trong app.
+
+**Nhắc thời khoá biểu** (mặc định 20:00): tối hôm trước liệt kê các tiết của
+ngày mai để soạn cặp — thứ con quên nhiều nhất không phải bài tập mà là mang
+đúng sách vở. Chỉ bắn khi hôm sau **thật sự có tiết**, nên người lớn bật sẵn
+cũng không nhận gì, và **bỏ qua ngày nghỉ lễ** (dùng lại danh mục lễ tết: nhắc
+soạn cặp cho ngày Quốc khánh thì lần sau con sẽ bỏ qua mọi thông báo của app).
 
 Nhắc sự kiện chỉ gửi cho thành viên **phụ huynh** — giỗ chạp và sinh nhật là
 việc người lớn chuẩn bị, không cần dựng con dậy lúc 8h sáng.
@@ -45,10 +56,48 @@ nhiều ngày:
 
 Giỗ âm lịch không có ngày kết thúc: một ngày giỗ là một ngày.
 
+**Ngày âm lặp hàng tháng** (`LUNAR_MONTHLY`) cho mùng 1 và ngày rằm — thứ nhà
+có bàn thờ phải nhớ nhiều nhất. Chỉ khai ngày âm, không khai tháng. Năm nhuận
+ra **13 lần** chứ không phải 12: tháng nhuận cũng có mùng 1 và ngày rằm của nó,
+bỏ qua thì năm đó mất đúng một lần cúng. Ngày 30 ở tháng thiếu lùi về 29, cùng
+quy ước với ngày giỗ.
+
+Vì một sự kiện như vậy có 12–13 lần trong cùng một năm âm, khoá của
+`EventOccurrence` đổi từ `(eventId, year)` sang **`(eventId, solarDate)`**. Đổi
+khoá thì mỗi lượt materialize phải tự dọn những lần cũ của các năm đang tính
+lại mà kế hoạch mới không còn — nếu không, sửa từ mùng 1 sang ngày rằm sẽ để
+lại đủ 12 lần cũ nằm trên lịch.
+
 **Dương lịch là mặc định** ở form thêm sự kiện — phần lớn thứ người ta thêm
 (chuyến đi, lịch hẹn, sinh nhật) đều theo dương; âm lịch để dành cho giỗ chạp.
 Bấm "+ Thêm sự kiện ngày 3/10" ngay trong ô ngày ở trang Lịch thì form mở ra với
 ngày đó điền sẵn và ở chế độ "một lần" (`/su-kien?ngay=YYYY-MM-DD`).
+
+**Lễ tết Việt Nam có sẵn, không phải gõ.** Tết Nguyên Đán, Ông Công Ông Táo,
+Tất niên, Rằm tháng Giêng, Hàn thực, Giỗ Tổ Hùng Vương, Phật Đản, Đoan Ngọ,
+Vu Lan, Trung Thu… (âm lịch) cùng 1/1, 8/3, 30/4, 1/5, 2/9, 20/10, 20/11,
+Giáng sinh… (dương lịch) — danh mục ở
+[lib/holidays.ts](apps/server/src/lib/holidays.ts).
+
+- **Không nằm trong DB.** Ngày lễ là của chung, năm nào cũng có và không nhà
+  nào sửa; chép vào bảng `Event` thì mỗi gia đình lại có một bản sao, thêm lễ
+  mới phải viết migration, và danh sách sự kiện của nhà bị hai chục dòng không
+  phải của mình làm loãng. Ngày âm được quy đổi tại chỗ bằng đúng `lunar.ts`
+  đang tính ngày giỗ, nên Tết trên lịch và Tết trong thông báo không thể lệch
+  nhau — kể cả năm nhuận (Vu Lan 2025 rơi vào 6/9 vì nhuận tháng 6).
+- **Ba nhóm**: `PUBLIC` được nghỉ (đỏ trên lịch, như chủ nhật), `TRADITIONAL`
+  lễ tết cổ truyền (cam), `OBSERVANCE` ngày kỷ niệm vẫn đi làm (xám).
+- **Hiện ở**: ô ngày và chi tiết ngày trên trang Lịch (cả lịch dương lẫn âm),
+  một thẻ "Lễ tết Việt Nam" ở trang Sự kiện kèm danh sách cả năm gom theo
+  tháng, và một dải báo trên màn hình Hôm nay khi hôm nay là ngày lễ.
+- **Nhắc**: chỉ những ngày thật sự phải chuẩn bị mới bắn thông báo
+  (`remind: true` trong danh mục) — Tết trước 14 ngày, Trung Thu và 20/11
+  trước một tuần, còn lại trước 1–3 ngày, 8h sáng, gửi **cả nhà** chứ không
+  riêng phụ huynh. Tắt ở Cài đặt → Nhắc lễ tết Việt Nam; tắt rồi thì lịch nhắc
+  đã sinh sẵn cũng bị dọn, nhưng ngày lễ vẫn hiện trên lịch.
+
+Tất niên ghi là "30 tháng Chạp" và tự lùi về 29 ở năm tháng Chạp thiếu — cùng
+một quy ước dân gian với ngày giỗ 30, dùng chung hàm `resolveLunarAnniversary`.
 
 **Sinh nhật đi thẳng từ hồ sơ thành viên.** Khai `birthday` trong Cài đặt →
 Gia đình là có ngay một `Event` gắn với người đó qua `birthdayUserId` (một
@@ -58,10 +107,43 @@ kiện theo kịp; xoá ngày sinh, tắt hoặc gỡ tài khoản thì sự ki�
 Sự kiện loại này **không sửa hay xoá được ở trang Sự kiện** — cho sửa cả hai
 chỗ thì hai nơi sẽ lệch nhau ngay lần đầu ai đó sửa nhầm chỗ.
 
+**Tick ngay trong Telegram.** Tin nhắc việc mang sẵn nút `✓ Xong`, `½ Làm dở`
+và `💤 Hoãn 15 phút`; bài tập có `✓ Đã làm xong`, ghi chú có hạn có `✓ Xong`
+(kèm cả việc tự đẻ ghi chú cho chu kỳ sau). Phải mở app mới tick được thì phần
+lớn lần nhắc sẽ không bao giờ được tick, và số liệu trong app thành vô nghĩa.
+
+`callback_data` chỉ được 64 byte nên mã hoá chặt (`r:<routineId>:<ngày>:<D|P>`).
+Danh tính lấy từ **chat đã liên kết**, rồi vẫn đi qua đúng luật quyền như trên
+web (`routines/mark.ts` dùng chung cho cả hai đường vào) — biết `callback_data`
+mà chat chưa liên kết thì không tick được gì. Bấm xong, bot sửa lại chính tin
+nhắn đó và gỡ nút, để mở lại lịch sử chat không bấm nhầm lần nữa.
+
 Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
 native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
 vẫn chạy. Kênh được tính lại lúc gửi chứ không chốt lúc sinh lịch — xem phần
-Quy ước bên dưới.
+Quy ước bên dưới. **Giờ yên lặng cũng được kiểm lại lúc gửi**: lịch nhắc sinh
+trước tới 60 ngày nên người vừa đặt giờ yên lặng hôm nay vẫn còn cả một kho
+nhắc chốt giờ từ trước; rơi vào khoảng đó thì bị huỷ, không dời sang sáng hôm
+sau (việc đến hạn 22h mà bắn lúc 6h thì chẳng còn nghĩa gì).
+
+**Dùng được khi mất mạng** (màn hình Hôm nay). Hai nửa tách bạch:
+
+- **đọc**: ảnh chụp cache react-query trong localStorage, hạn 24 giờ, chỉ giữ
+  vài truy vấn nhẹ — mở app lúc không có mạng vẫn thấy việc hôm nay thay vì
+  màn hình trắng (service worker lo phần vỏ app);
+- **ghi**: tick việc lúc mất mạng thì vào hàng đợi rồi gửi lại khi có mạng,
+  kèm dải báo "1 thay đổi sẽ gửi khi có mạng" — không nói thì người ta tick
+  xong, thấy dấu ✓ và tưởng đã xong.
+
+Hàng đợi giữ **nguyên thứ tự và không gộp**: bấm "Xong" hai lần nghĩa là tick
+rồi bỏ tick, gộp lại còn một lần thì kết quả cuối cùng ngược hẳn ý người dùng.
+Gửi lại cũng tuần tự vì lý do đó.
+
+> Ảnh chụp chứa dữ liệu cả nhà nên **không bao giờ được ghi khi đã đăng xuất**,
+> và bị xoá ngay khi đăng xuất hoặc khi `auth.me` trả null (hết phiên). Đăng
+> xuất dùng `resetQueries` chứ không phải `invalidate` (chỉ đánh dấu cũ, dữ
+> liệu vẫn nằm đó) hay `clear` (xoá nhưng không nạp lại, giao diện kẹt ở màn
+> hình cũ).
 
 **App điện thoại (phase 7)** — vỏ Capacitor ở [apps/mobile](apps/mobile/README.md).
 Code đã xong và kênh FCM có test, nhưng **chưa build lần nào**: cần máy Mac có
@@ -69,6 +151,22 @@ Xcode, Android SDK, và tài khoản Apple Developer (99 USD/năm) để cài l�
 lâu dài. Trong app, nhắc nhở đi hai đường chồng nhau: push từ server (nội dung
 mới, cần mạng) và local notification app tự đặt trước 3 ngày (đúng giờ kể cả
 mất mạng). Trùng thì hệ điều hành gộp lại.
+
+**Sổ sức khoẻ** (`/suc-khoe`) — bốn thứ nhà nào cũng phải nhớ mà không ai nhớ
+nổi: chiều cao/cân nặng theo tháng (kèm biểu đồ và BMI), mũi tiêm đã tiêm,
+lịch khám, thuốc đang dùng. Mỗi bản ghi có thể mang một **ngày hẹn lần sau**
+(mũi tiêm kế, ngày tái khám) và được nhắc trước 7 ngày / 1 ngày / đúng sáng
+hôm đó. Hồ sơ của **con thì nhắc bố mẹ** — lịch tiêm là việc người lớn phải
+xếp lịch đi làm để đưa con đi, nhắc đứa bé lớp 5 thì không ai hành động cả.
+
+> Biểu đồ **không có đường chuẩn WHO**. Muốn biết con ở phân vị nào thì hỏi
+> bác sĩ: app không bịa ra bảng LMS, và số liệu y tế đoán bừa thì tệ hơn là
+> không có.
+
+Quyền: phụ huynh xem và ghi cho cả nhà, con chỉ phần của mình — không thấy hồ
+sơ của bố mẹ hay anh chị em. Bốn loại nằm chung một bảng `HealthRecord` vì
+chúng dùng chung hệt một bộ cột và luôn được xem trên cùng một dòng thời gian;
+tách bốn bảng thì mọi truy vấn đều phải UNION.
 
 **Agent máy tính (phase 8)** — [apps/agent](apps/agent/README.md). Tiến trình
 nền không có dependency nào, đọc tên app đang dùng và số phút rồi gửi về server.
@@ -78,6 +176,31 @@ và giới hạn giờ giao cho Screen Time / Family Link ở tầng hệ điề
 
 > Con thấy đúng những gì bố mẹ thấy về máy mình, và tự gỡ máy được bất cứ lúc
 > nào. Hãy nói với con là máy có cài — lý do ở `docs/PLAN.md` mục 1.
+
+**Lịch cho iPhone / Google Calendar.** Cài đặt → "Lịch cho iPhone" tạo một link
+`/calendar.ics?token=…` để **đăng ký** (subscribe) trong lịch hệ thống: ngày
+giỗ, lễ tết, sinh nhật và chuyến đi hiện thẳng ở chỗ người trong nhà vẫn nhìn
+mỗi ngày, không cần cài app. Token chỉ hiện **một lần** (DB giữ SHA-256, giống
+Session và AgentDevice); tạo lại là thu hồi link cũ.
+
+Việc định kỳ cố ý **không** được xuất: chúng có nhắc trước, nhắc lại, tick xong
+— cả một vòng đời lịch hệ thống không hiểu — và đổ 6 việc mỗi ngày vào Lịch
+iPhone chỉ làm hỏng cái lịch đó.
+
+> Thêm route REST mới thì **phải** thêm một `handle` trong
+> [deploy/Caddyfile](deploy/Caddyfile), nếu không nó rơi xuống nhánh SPA và trả
+> `index.html` kèm mã 200 — phần mềm lịch nhận HTML và báo "lịch không hợp lệ".
+
+**Tìm kiếm toàn cục** (`/tim-kiem`) quét ghi chú, nhật ký, bài tập, sự kiện và
+việc định kỳ. Gõ **không dấu** vẫn ra ("gio ong noi" → "Giỗ ông nội"): cả hai
+vế đi qua hàm `vn_unaccent` tự viết trong migration — không dùng extension
+`unaccent` vì nó cần quyền superuser mà máy chủ quản lý có nơi không cho. Quy
+mô gia đình thì quét bảng đã đủ nhanh; hàm khai `IMMUTABLE` sẵn nên khi nào
+chậm thì thêm `pg_trgm` và index hoá được ngay.
+
+Kết quả tôn trọng đúng quyền xem trong app: **nhật ký riêng tư của người khác
+và ghi chú riêng của người khác không bao giờ lọt vào** — có test riêng cho
+từng ca, vì đây là thứ hỏng âm thầm và chỉ phát hiện ra khi đã muộn.
 
 Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 - **2 bước**: TOTP chuẩn RFC 6238, tự viết ([lib/totp.ts](apps/server/src/lib/totp.ts)),
@@ -158,16 +281,20 @@ apps/server/        Fastify + tRPC + Prisma
   prisma/schema.prisma   toàn bộ model
   src/lib/               time (múi giờ VN), recurrence (RRULE), session, password
   src/lib/lunar.ts       âm lịch VN (Hồ Ngọc Đức, UTC+7)
+  src/lib/holidays.ts    danh mục lễ tết VN dựng sẵn (âm + dương), không vào DB
+  src/ical.ts            /calendar.ics — lịch .ics để đăng ký ở Lịch iPhone
   src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
   src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
-  src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler
+  src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler,
+                         actions (nút bấm trong tin Telegram)
+  src/routines/mark.ts   luật tick việc, dùng chung cho web lẫn Telegram
   src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
   src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
-  src/trpc/routers/      auth, family, routine, event, note, diary, notify,
-                         stats, study, screen
+  src/trpc/routers/      auth, family, routine, event, holiday, health, note,
+                         diary, notify, search, stats, study, screen
 apps/web/           React 19 + Vite + Tailwind 4 + PWA
   src/pages/             Today, Week, Diary, Notes, Events, Calendar, Stats,
-                         Study, Routines, Settings, Login
+                         Study, Health, Routines, Search, Settings, Login
   src/lib/native.ts      cầu nối Capacitor: push token + local notification
 apps/mobile/        vỏ Capacitor (iOS/Android) — ngoài pnpm workspace
 apps/agent/         agent máy tính, không dependency — ngoài pnpm workspace
@@ -191,7 +318,8 @@ như "floating date" để thứ trong tuần luôn khớp lịch VN.
 
 **Âm lịch.** Đã làm ở [lib/lunar.ts](apps/server/src/lib/lunar.ts) bằng thuật
 toán Hồ Ngọc Đức (UTC+7). **Đừng thay bằng thư viện lịch Trung Quốc**: chúng
-dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
+dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm. Mọi thứ cần ngày âm — giỗ, lễ
+tết, lưới lịch — đều đi qua file này; client không tự quy đổi bao giờ.
 
 **Phân quyền.** Hai trục tách rời nhau:
 

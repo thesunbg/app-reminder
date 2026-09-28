@@ -253,6 +253,52 @@ export default function NotifySettings() {
 
       <hr style={{ borderColor: 'var(--border)' }} />
 
+      {/* ---------- Thời khoá biểu ngày mai ---------- */}
+      {(s.isChild || s.classReminderAt) && (
+        <>
+          <TimeSetting
+            label="Nhắc thời khoá biểu ngày mai"
+            hint="Tối hôm trước liệt kê các tiết của ngày mai để soạn cặp. Chỉ gửi khi hôm sau thật sự có tiết, và bỏ qua ngày nghỉ lễ."
+            value={s.classReminderAt}
+            fallback="20:00"
+            onSave={(v) => savePrefs.mutate({ classReminderAt: v })}
+            saving={savePrefs.isPending}
+          />
+          <hr style={{ borderColor: 'var(--border)' }} />
+        </>
+      )}
+
+      {/* ---------- Tổng kết tuần ---------- */}
+      <TimeSetting
+        label="Tổng kết tuần"
+        hint="Tối chủ nhật: tuần này cả nhà làm được bao nhiêu, bài nào còn nợ, tuần tới có gì phải chuẩn bị."
+        value={s.weeklyDigestAt}
+        fallback="20:00"
+        onSave={(v) => savePrefs.mutate({ weeklyDigestAt: v })}
+        saving={savePrefs.isPending}
+      />
+
+      <hr style={{ borderColor: 'var(--border)' }} />
+
+      {/* ---------- Nhắc lễ tết ---------- */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Dot on={s.notifyHolidays} />
+          <span className="flex-1 text-sm font-semibold">Nhắc lễ tết Việt Nam</span>
+          <Switch
+            checked={s.notifyHolidays}
+            onChange={(v) => savePrefs.mutate({ notifyHolidays: v })}
+            label="Bật nhắc lễ tết Việt Nam"
+          />
+        </div>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          Tết Nguyên Đán, Ông Công Ông Táo, Trung Thu, Giỗ Tổ, 30/4, 2/9, 20/11… —
+          nhắc trước vài ngày, 8h sáng. Ngày lễ vẫn hiện trên lịch kể cả khi tắt.
+        </p>
+      </section>
+
+      <hr style={{ borderColor: 'var(--border)' }} />
+
       {/* ---------- Giờ yên lặng ---------- */}
       <QuietHours
         from={s.quietFrom}
@@ -262,6 +308,48 @@ export default function NotifySettings() {
         error={savePrefs.error?.message ?? null}
       />
     </Card>
+  )
+}
+
+/** Một mục "bật/tắt kèm giờ" — dùng cho nhắc thời khoá biểu và tổng kết tuần. */
+function TimeSetting({ label, hint, value, fallback, onSave, saving }: {
+  label: string
+  hint: string
+  value: string | null
+  fallback: string
+  onSave: (v: string | null) => void
+  saving: boolean
+}) {
+  const [time, setTime] = useState(value ?? fallback)
+  useEffect(() => { if (value) setTime(value) }, [value])
+  const on = Boolean(value)
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Dot on={on} />
+        <span className="flex-1 text-sm font-semibold">{label}</span>
+        <Switch checked={on} label={label} onChange={(v) => onSave(v ? time : null)} />
+      </div>
+      <p className="text-xs" style={{ color: 'var(--muted)' }}>{hint}</p>
+      {on && (
+        <div className="flex items-center gap-2">
+          <input
+            className="input-base !w-auto"
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+          <button
+            className="btn btn-ghost !py-1.5 text-xs"
+            onClick={() => onSave(time)}
+            disabled={saving || time === value}
+          >
+            Lưu giờ
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 

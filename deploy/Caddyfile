@@ -22,6 +22,11 @@
 	handle /agent/* {
 		reverse_proxy server:3001
 	}
+	# Lịch .ics để đăng ký trong Lịch iPhone / Google Calendar. Thiếu khối này
+	# thì phần mềm lịch nhận index.html kèm mã 200 và báo "lịch không hợp lệ".
+	handle /calendar.ics {
+		reverse_proxy server:3001
+	}
 	# Ảnh đính kèm bài tập. Thiếu khối này thì <img src="/study/anh/..."> rơi
 	# xuống nhánh SPA và nhận index.html kèm mã 200 — ảnh hỏng im lặng.
 	handle /study/* {

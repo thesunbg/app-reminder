@@ -1,5 +1,7 @@
 import { db } from '../db.js'
-import { getUpdates, sendMessage, telegramEnabled, escapeHtml } from '../lib/telegram.js'
+import { answerCallback, editMessage, getUpdates, sendMessage, telegramEnabled, escapeHtml } from '../lib/telegram.js'
+import type { TelegramUpdate } from '../lib/telegram.js'
+import { runAction } from './actions.js'
 
 const OFFSET_KEY = 'telegram:offset'
 const LONG_POLL_SEC = 30
@@ -22,6 +24,8 @@ const HELP = [
   '/start &lt;mã&gt; — liên kết tài khoản Family Hub',
   '/huylienket — ngắt liên kết máy này',
   '/help — xem trợ giúp',
+  '',
+  'Tin nhắc việc có sẵn nút <b>✓ Xong</b>, <b>½ Làm dở</b> và <b>💤 Hoãn</b> — bấm thẳng ở đây, không cần mở app.',
 ].join('\n')
 
 async function handleStart(chatId: string, code: string): Promise<void> {
@@ -56,6 +60,35 @@ async function handleUnlink(chatId: string): Promise<void> {
   )
 }
 
+/**
+ * Người dùng bấm một nút dưới tin nhắn nhắc nhở.
+ *
+ * Luôn `answerCallback` — kể cả khi hỏng — nếu không Telegram quay vòng tròn
+ * trên máy họ tới lúc hết giờ, trông như bot đã chết.
+ */
+async function handleCallback(q: NonNullable<TelegramUpdate['callback_query']>): Promise<void> {
+  const chatId = q.message ? String(q.message.chat.id) : String(q.from.id)
+  let result: Awaited<ReturnType<typeof runAction>>
+  try {
+    result = await runAction(chatId, q.data ?? '')
+  } catch (err) {
+    console.error('[telegram] lỗi khi chạy nút', q.data, (err as Error).message)
+    await answerCallback(q.id, 'Có lỗi, thử lại sau').catch(() => {})
+    return
+  }
+
+  await answerCallback(q.id, result.toast)
+
+  // ghi kết quả vào chính tin nhắn đó và gỡ nút, để mở lại lịch sử chat không
+  // bấm nhầm lần nữa
+  if (q.message?.text && result.note) {
+    const body = `${escapeHtml(q.message.text)}\n\n${result.note}`
+    await editMessage(chatId, q.message.message_id, body, result.keepButtons ? undefined : [] /* [] = gỡ nút */).catch((err) => {
+      console.error('[telegram] không sửa được tin nhắn', (err as Error).message)
+    })
+  }
+}
+
 /** Xử lý một lượt getUpdates. Trả về số update đã xử lý. */
 export async function pollTelegramOnce(longPoll = false): Promise<number> {
   if (!telegramEnabled()) return 0
@@ -65,6 +98,15 @@ export async function pollTelegramOnce(longPoll = false): Promise<number> {
   if (updates.length === 0) return 0
 
   for (const u of updates) {
+    if (u.callback_query) {
+      // lỗi ở một lần bấm không được phép chặn offset: kẹt offset là kẹt mãi
+      try {
+        await handleCallback(u.callback_query)
+      } catch (err) {
+        console.error('[telegram] lỗi xử lý nút', u.update_id, (err as Error).message)
+      }
+      continue
+    }
     const msg = u.message
     const text = msg?.text?.trim()
     if (!msg || !text) continue

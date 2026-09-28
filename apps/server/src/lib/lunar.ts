@@ -252,3 +252,27 @@ export function lunarOf(solar: string, timeZone: number = VN_TIMEZONE): LunarDat
   const { day, month, year } = parseSolarString(solar)
   return solarToLunar(day, month, year, timeZone)
 }
+
+/**
+ * Quy đổi một ngày âm lịch lặp hàng năm (giỗ, lễ tết) sang dương lịch cho một
+ * năm âm cụ thể.
+ *
+ * Hai quy ước dân gian được áp dụng ở đây:
+ *  - Ngày 30 ở tháng thiếu (chỉ 29 ngày) thì lùi về 29, không bỏ. Đây cũng là
+ *    cách Tất niên "30 Tết" rơi đúng vào ngày cuối tháng Chạp mọi năm.
+ *  - Ghi là tháng nhuận nhưng năm đó không nhuận thì tính ở tháng thường cùng
+ *    số — không bỏ giỗ.
+ */
+export function resolveLunarAnniversary(
+  lunarDay: number,
+  lunarMonth: number,
+  wantLeap: boolean,
+  lunarYear: number,
+): string | null {
+  const leap = wantLeap && lunarToSolar(1, lunarMonth, lunarYear, true) !== null
+  const len = lunarMonthLength(lunarMonth, lunarYear, leap)
+  if (len === 0) return null
+  const day = Math.min(lunarDay, len)
+  const solar = lunarToSolar(day, lunarMonth, lunarYear, leap)
+  return solar ? toSolarString(solar) : null
+}

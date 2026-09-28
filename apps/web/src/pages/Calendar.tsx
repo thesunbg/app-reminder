@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, Spinner } from '@/components/ui'
 import { fullDate, today } from '@/lib/format'
+import { holidayMeta, holidaySpan, lunarLabel } from '@/lib/holidays'
 import { trpc, type RouterOutputs } from '@/lib/trpc'
 
 type Day = RouterOutputs['event']['calendar'][number]
@@ -179,7 +180,11 @@ function Grid({ leading, days, selected, today: t, onSelect, big, small, smallSt
         {days.map((d) => {
           const isToday = d.date === t
           const isSel = d.date === selected
-          const sunday = dow(d.date) === 6
+          // ngày nghỉ lễ tô đỏ như chủ nhật: đó là cách lịch giấy vẫn làm
+          const dayOff = d.holidays.some((h) => h.dayOff)
+          const sunday = dow(d.date) === 6 || dayOff
+          // mỗi loại hiện tối đa 2 dòng; phần còn lại gộp thành "+N"
+          const hidden = Math.max(d.holidays.length - 2, 0) + Math.max(d.events.length - 2, 0)
           return (
             <button
               key={d.date}
@@ -197,6 +202,22 @@ function Grid({ leading, days, selected, today: t, onSelect, big, small, smallSt
                 <span className="text-[10px] leading-none" style={{ color: smallStrong(d) ? 'var(--brand)' : 'var(--muted)', fontWeight: smallStrong(d) ? 700 : 400 }}>{small(d)}</span>
               </span>
               <span className="mt-1 flex flex-col gap-0.5">
+                {d.holidays.slice(0, 2).map((h) => {
+                  const m = holidayMeta(h.category)
+                  const cont = h.dayCount > 1 && h.dayIndex > 1
+                  return (
+                    <span
+                      key={h.id}
+                      // ô ngày chỉ rộng chừng 50px: bỏ icon đi để còn chỗ cho chữ,
+                      // màu nền đã nói loại lễ rồi
+                      className="truncate rounded px-1 text-[10px] leading-4 text-white"
+                      style={{ background: m.color, opacity: cont ? 0.72 : 1 }}
+                      title={`${h.title}${h.dayCount > 1 ? ` (ngày ${h.dayIndex}/${h.dayCount})` : ''}`}
+                    >
+                      {cont ? '↳ ' : ''}{h.title}
+                    </span>
+                  )
+                })}
                 {d.events.slice(0, 2).map((e) => {
                   const m = TYPE_META[e.type] ?? TYPE_META.OTHER!
                   // ngày giữa/cuối của sự kiện dài: bỏ icon, thêm dấu nối để thấy nó tiếp diễn
@@ -212,7 +233,7 @@ function Grid({ leading, days, selected, today: t, onSelect, big, small, smallSt
                     </span>
                   )
                 })}
-                {d.events.length > 2 && <span className="text-[10px]" style={{ color: 'var(--muted)' }}>+{d.events.length - 2}</span>}
+                {hidden > 0 && <span className="text-[10px]" style={{ color: 'var(--muted)' }}>+{hidden}</span>}
               </span>
             </button>
           )
@@ -243,9 +264,49 @@ function DayDetail({ day }: { day: Day | undefined }) {
         + Thêm sự kiện ngày {Number(day.date.slice(8, 10))}/{Number(day.date.slice(5, 7))}
       </Link>
 
+      {day.holidays.length > 0 && (
+        <ul className="mb-3 flex flex-col gap-2">
+          {day.holidays.map((h) => {
+            const m = holidayMeta(h.category)
+            return (
+              <li key={h.id} className="flex items-center gap-3 text-sm">
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base"
+                  style={{ background: `color-mix(in srgb, ${m.color} 18%, transparent)` }}
+                >
+                  {m.icon}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    {h.title}
+                    {h.dayCount > 1 && (
+                      <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--muted)' }}>
+                        ngày {h.dayIndex}/{h.dayCount}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    {[
+                      m.label,
+                      // nhãn "Nghỉ lễ" đã nói rồi, khỏi lặp "được nghỉ"
+                      h.dayOff && h.category !== 'PUBLIC' ? 'được nghỉ' : null,
+                      h.calendar === 'LUNAR' ? lunarLabel(l) : null,
+                      h.dayCount > 1 ? holidaySpan(h.startDate, h.endDate) : null,
+                      h.note,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
       {day.events.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Chưa có sự kiện nào trong ngày này.
+          {day.holidays.length > 0 ? 'Nhà mình chưa có sự kiện riêng nào trong ngày này.' : 'Chưa có sự kiện nào trong ngày này.'}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -268,7 +329,9 @@ function DayDetail({ day }: { day: Day | undefined }) {
                       m.label,
                       e.endDate ? `${dm(e.startDate)} → ${dm(e.endDate)}` : null,
                       e.startTime ? (e.endTime ? `${e.startTime}–${e.endTime}` : e.startTime) : null,
-                      e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch',
+                      e.calendar === 'LUNAR_MONTHLY'
+                        ? 'âm lịch, hàng tháng'
+                        : e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch',
                       e.note || null,
                     ]
                       .filter(Boolean)

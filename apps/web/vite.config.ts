@@ -45,6 +45,7 @@ export default defineConfig({
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
       '/export': { target: 'http://localhost:3001', changeOrigin: true },
+      '/calendar.ics': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
   // `vite preview` dùng cấu hình proxy riêng — cần cho việc thử Web Push
@@ -54,6 +55,7 @@ export default defineConfig({
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
       '/export': { target: 'http://localhost:3001', changeOrigin: true },
+      '/calendar.ics': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
 })

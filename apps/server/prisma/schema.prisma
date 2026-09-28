@@ -20,6 +20,9 @@ enum Role {
 enum CalendarType {
   SOLAR
   LUNAR
+  /// Lặp theo NGÀY ÂM HÀNG THÁNG (mùng 1, ngày rằm) — mỗi năm 12–13 lần, kể cả
+  /// tháng nhuận. Chỉ dùng `lunarDay`; `lunarMonth` để null.
+  LUNAR_MONTHLY
 }
 
 enum EventType {
@@ -49,7 +52,10 @@ enum NotificationKind {
   NOTE_AHEAD
   NOTE_DUE
   DAILY_DIGEST
+  WEEKLY_DIGEST
   HOMEWORK_DUE
+  /// "Mai thứ 4: Toán, Lý, Thể dục" — nhắc chuẩn bị sách vở theo thời khoá biểu
+  CLASS_TOMORROW
 }
 
 enum NotificationStatus {
@@ -92,10 +98,19 @@ model User {
   telegramLinkExpires DateTime?
   notifyTelegram      Boolean   @default(true)
   notifyWebPush       Boolean   @default(true)
+  /// Nhắc lễ tết Việt Nam (Tết, Trung Thu, Giỗ Tổ, 2/9...). Danh mục dựng sẵn
+  /// trong `lib/holidays.ts`, không có hàng nào trong DB — đây chỉ là công tắc.
+  notifyHolidays      Boolean   @default(true)
   /// Push native qua FCM (app Capacitor trên iOS/Android)
   notifyNative        Boolean   @default(true)
   /// Giờ VN gửi tổng kết cuối ngày kèm lời nhắc viết nhật ký. null = tắt.
   dailyDigestAt       String?
+  /// Giờ VN gửi tổng kết TUẦN (tối chủ nhật). null = tắt. Chỉ phụ huynh dùng.
+  weeklyDigestAt      String?
+  /// Giờ VN tối hôm trước nhắc thời khoá biểu ngày mai. null = tắt.
+  /// Chỉ bắn khi hôm sau thật sự có tiết — người lớn không có thời khoá biểu
+  /// nên bật sẵn cũng không phiền ai.
+  classReminderAt     String?   @default("20:00")
   // giờ yên lặng (giờ VN) — không bắn thông báo trong khoảng này
   quietFrom           String?   // "22:30"
   quietTo             String?   // "06:00"
@@ -103,6 +118,13 @@ model User {
   diaryPrivate Boolean  @default(true)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
+
+  /// Link đăng ký lịch (.ics) cho Lịch iPhone / Google Calendar. DB chỉ giữ
+  /// SHA-256 của token, giống Session và AgentDevice — token thô chỉ hiện đúng
+  /// một lần lúc tạo, mất thì tạo lại (link cũ hết hiệu lực ngay).
+  icalTokenHash  String?   @unique
+  icalCreatedAt  DateTime?
+  icalLastUsedAt DateTime?
 
   // đăng nhập 2 bước (TOTP). Bí mật được mã hoá AES-GCM bằng SESSION_SECRET,
   // chỉ có hiệu lực khi totpEnabled = true (lúc đang thiết lập vẫn là false).
@@ -123,6 +145,7 @@ model User {
   studyRecords  StudyRecord[]
   agentDevices  AgentDevice[]
   screenReports ScreenReport[]
+  healthRecords HealthRecord[]
   /// sự kiện sinh nhật tự sinh từ `birthday` ở trên
   birthdayEvent Event?         @relation("BirthdayEvent")
 
@@ -281,6 +304,8 @@ model EventOccurrence {
   id      String @id @default(cuid())
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// Năm dùng để sinh ra lần này: năm ÂM với LUNAR/LUNAR_MONTHLY, năm DƯƠNG với
+  /// SOLAR. Không còn là khoá duy nhất kể từ khi có ngày âm hàng tháng.
   year    Int
   solarDate String // "YYYY-MM-DD" — ngày bắt đầu
   /// Ngày kết thúc đã quy đổi cho năm này; null = sự kiện một ngày.
@@ -288,12 +313,61 @@ model EventOccurrence {
   /// độ dài từ Event mỗi lần vẽ lưới.
   endDate   String?
 
-  @@unique([eventId, year])
+  // Khoá theo NGÀY chứ không theo năm: sự kiện "mùng 1 hàng tháng" có 12–13 lần
+  // trong cùng một năm âm, khoá theo năm thì chúng ghi đè lẫn nhau.
+  @@unique([eventId, solarDate])
+  @@index([eventId, year])
   @@index([solarDate])
   @@index([endDate])
 }
 
+// ---------- Nhóm 2b: sổ sức khoẻ ----------
+
+/// Một dòng trong sổ sức khoẻ của một người.
+///
+/// Gộp bốn loại vào một bảng thay vì bốn bảng: chúng dùng chung hệt nhau một
+/// bộ cột (của ai, ngày nào, tiêu đề, ghi chú, hẹn lần sau) và luôn được xem
+/// chung trên một dòng thời gian. Bốn bảng thì mọi truy vấn đều phải UNION.
+model HealthRecord {
+  id       String     @id @default(cuid())
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind     HealthKind
+
+  /// Ngày xảy ra: ngày đo, ngày tiêm, ngày khám. "YYYY-MM-DD" giờ VN.
+  date     String
+  /// GROWTH không cần tiêu đề (đo là đo), các loại khác thì bắt buộc.
+  title    String     @default("")
+
+  /// chỉ dùng cho GROWTH
+  heightCm Float?
+  weightKg Float?
+
+  note     String?
+  /// Hẹn lần sau: mũi tiêm kế tiếp, ngày tái khám, ngày hết thuốc. Có giá trị
+  /// thì được nhắc như một sự kiện; null thì chỉ là bản ghi lịch sử.
+  nextDate String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, kind, date])
+  @@index([nextDate])
+}
+
 // ---------- Nhóm 3: ghi chú (kiểu Google Keep) ----------
+
+/// Loại bản ghi trong sổ sức khoẻ.
+enum HealthKind {
+  /// chiều cao / cân nặng theo tháng
+  GROWTH
+  /// mũi tiêm đã tiêm
+  VACCINE
+  /// khám định kỳ, khám bệnh
+  CHECKUP
+  /// đơn thuốc, thuốc đang dùng
+  MEDICINE
+}
 
 enum NoteKind {
   TEXT
