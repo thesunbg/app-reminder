@@ -131,6 +131,22 @@ lâu dài. Trong app, nhắc nhở đi hai đường chồng nhau: push từ ser
 mới, cần mạng) và local notification app tự đặt trước 3 ngày (đúng giờ kể cả
 mất mạng). Trùng thì hệ điều hành gộp lại.
 
+**Sổ sức khoẻ** (`/suc-khoe`) — bốn thứ nhà nào cũng phải nhớ mà không ai nhớ
+nổi: chiều cao/cân nặng theo tháng (kèm biểu đồ và BMI), mũi tiêm đã tiêm,
+lịch khám, thuốc đang dùng. Mỗi bản ghi có thể mang một **ngày hẹn lần sau**
+(mũi tiêm kế, ngày tái khám) và được nhắc trước 7 ngày / 1 ngày / đúng sáng
+hôm đó. Hồ sơ của **con thì nhắc bố mẹ** — lịch tiêm là việc người lớn phải
+xếp lịch đi làm để đưa con đi, nhắc đứa bé lớp 5 thì không ai hành động cả.
+
+> Biểu đồ **không có đường chuẩn WHO**. Muốn biết con ở phân vị nào thì hỏi
+> bác sĩ: app không bịa ra bảng LMS, và số liệu y tế đoán bừa thì tệ hơn là
+> không có.
+
+Quyền: phụ huynh xem và ghi cho cả nhà, con chỉ phần của mình — không thấy hồ
+sơ của bố mẹ hay anh chị em. Bốn loại nằm chung một bảng `HealthRecord` vì
+chúng dùng chung hệt một bộ cột và luôn được xem trên cùng một dòng thời gian;
+tách bốn bảng thì mọi truy vấn đều phải UNION.
+
 **Agent máy tính (phase 8)** — [apps/agent](apps/agent/README.md). Tiến trình
 nền không có dependency nào, đọc tên app đang dùng và số phút rồi gửi về server.
 Kết quả ở **Học tập → Máy tính** và thành một dòng trong nhật ký. Nó chỉ **đọc
@@ -253,11 +269,11 @@ apps/server/        Fastify + tRPC + Prisma
   src/routines/mark.ts   luật tick việc, dùng chung cho web lẫn Telegram
   src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
   src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
-  src/trpc/routers/      auth, family, routine, event, holiday, note, diary,
-                         notify, search, stats, study, screen
+  src/trpc/routers/      auth, family, routine, event, holiday, health, note,
+                         diary, notify, search, stats, study, screen
 apps/web/           React 19 + Vite + Tailwind 4 + PWA
   src/pages/             Today, Week, Diary, Notes, Events, Calendar, Stats,
-                         Study, Routines, Search, Settings, Login
+                         Study, Health, Routines, Search, Settings, Login
   src/lib/native.ts      cầu nối Capacitor: push token + local notification
 apps/mobile/        vỏ Capacitor (iOS/Android) — ngoài pnpm workspace
 apps/agent/         agent máy tính, không dependency — ngoài pnpm workspace

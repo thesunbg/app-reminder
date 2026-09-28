@@ -46,6 +46,12 @@ async function stillRelevant(n: Notification): Promise<boolean> {
     if (!eventId) return false
     return (await db.event.count({ where: { id: eventId } })) > 0
   }
+  if (n.refTable === 'health') {
+    // bản ghi bị xoá sẽ để lại thông báo mồ côi, giống ca của Event
+    const [recordId] = n.refId.split(':')
+    if (!recordId) return false
+    return (await db.healthRecord.count({ where: { id: recordId } })) > 0
+  }
   if (n.refTable === 'note') {
     const [noteId] = n.refId.split(':')
     if (!noteId) return false

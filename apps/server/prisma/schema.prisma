@@ -145,6 +145,7 @@ model User {
   studyRecords  StudyRecord[]
   agentDevices  AgentDevice[]
   screenReports ScreenReport[]
+  healthRecords HealthRecord[]
   /// sự kiện sinh nhật tự sinh từ `birthday` ở trên
   birthdayEvent Event?         @relation("BirthdayEvent")
 
@@ -320,7 +321,53 @@ model EventOccurrence {
   @@index([endDate])
 }
 
+// ---------- Nhóm 2b: sổ sức khoẻ ----------
+
+/// Một dòng trong sổ sức khoẻ của một người.
+///
+/// Gộp bốn loại vào một bảng thay vì bốn bảng: chúng dùng chung hệt nhau một
+/// bộ cột (của ai, ngày nào, tiêu đề, ghi chú, hẹn lần sau) và luôn được xem
+/// chung trên một dòng thời gian. Bốn bảng thì mọi truy vấn đều phải UNION.
+model HealthRecord {
+  id       String     @id @default(cuid())
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind     HealthKind
+
+  /// Ngày xảy ra: ngày đo, ngày tiêm, ngày khám. "YYYY-MM-DD" giờ VN.
+  date     String
+  /// GROWTH không cần tiêu đề (đo là đo), các loại khác thì bắt buộc.
+  title    String     @default("")
+
+  /// chỉ dùng cho GROWTH
+  heightCm Float?
+  weightKg Float?
+
+  note     String?
+  /// Hẹn lần sau: mũi tiêm kế tiếp, ngày tái khám, ngày hết thuốc. Có giá trị
+  /// thì được nhắc như một sự kiện; null thì chỉ là bản ghi lịch sử.
+  nextDate String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, kind, date])
+  @@index([nextDate])
+}
+
 // ---------- Nhóm 3: ghi chú (kiểu Google Keep) ----------
+
+/// Loại bản ghi trong sổ sức khoẻ.
+enum HealthKind {
+  /// chiều cao / cân nặng theo tháng
+  GROWTH
+  /// mũi tiêm đã tiêm
+  VACCINE
+  /// khám định kỳ, khám bệnh
+  CHECKUP
+  /// đơn thuốc, thuốc đang dùng
+  MEDICINE
+}
 
 enum NoteKind {
   TEXT

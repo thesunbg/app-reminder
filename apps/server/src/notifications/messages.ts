@@ -38,5 +38,6 @@ export function notificationUrl(n: { kind: NotificationKind; refTable: string })
   if (n.refTable === 'note') return '/ghi-chu'
   if (n.refTable === 'event' || n.refTable === 'holiday') return '/su-kien'
   if (n.refTable === 'homework' || n.refTable === 'class') return '/hoc-tap'
+  if (n.refTable === 'health') return '/suc-khoe'
   return '/'
 }

@@ -9,6 +9,7 @@ import Diary from '@/pages/Diary'
 import Events from '@/pages/Events'
 import Notes from '@/pages/Notes'
 import Routines from '@/pages/Routines'
+import Health from '@/pages/Health'
 import Search from '@/pages/Search'
 import Settings from '@/pages/Settings'
 import Study from '@/pages/Study'
@@ -34,6 +35,7 @@ const TABS = [
   { to: '/lich', label: 'Lịch', icon: '📅', end: false },
   { to: '/thong-ke', label: 'Thống kê', icon: '◔', end: false },
   { to: '/hoc-tap', label: 'Học tập', icon: '🎓', end: false },
+  { to: '/suc-khoe', label: 'Sức khoẻ', icon: '🩺', end: false },
   { to: '/quan-ly', label: 'Quản lý', icon: '☰', end: false },
   { to: '/tim-kiem', label: 'Tìm kiếm', icon: '🔍', end: false },
   { to: '/cai-dat', label: 'Cài đặt', icon: '⚙', end: false },
@@ -89,6 +91,7 @@ export default function App() {
           <Route path="/lich" element={<CalendarPage />} />
           <Route path="/thong-ke" element={<Suspense fallback={<Spinner label="Đang tải biểu đồ…" />}><Stats /></Suspense>} />
           <Route path="/hoc-tap" element={<Study />} />
+          <Route path="/suc-khoe" element={<Health />} />
           <Route path="/quan-ly" element={<Routines />} />
           <Route path="/tim-kiem" element={<Search />} />
           <Route path="/cai-dat" element={<Settings />} />
