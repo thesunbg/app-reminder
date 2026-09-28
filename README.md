@@ -110,7 +110,10 @@ nhắn đó và gỡ nút, để mở lại lịch sử chat không bấm nhầm
 Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
 native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
 vẫn chạy. Kênh được tính lại lúc gửi chứ không chốt lúc sinh lịch — xem phần
-Quy ước bên dưới.
+Quy ước bên dưới. **Giờ yên lặng cũng được kiểm lại lúc gửi**: lịch nhắc sinh
+trước tới 60 ngày nên người vừa đặt giờ yên lặng hôm nay vẫn còn cả một kho
+nhắc chốt giờ từ trước; rơi vào khoảng đó thì bị huỷ, không dời sang sáng hôm
+sau (việc đến hạn 22h mà bắn lúc 6h thì chẳng còn nghĩa gì).
 
 **App điện thoại (phase 7)** — vỏ Capacitor ở [apps/mobile](apps/mobile/README.md).
 Code đã xong và kênh FCM có test, nhưng **chưa build lần nào**: cần máy Mac có

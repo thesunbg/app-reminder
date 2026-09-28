@@ -1,10 +1,12 @@
 import type { Notification } from '@prisma/client'
 import { db } from '../db.js'
 import { sendMessage } from '../lib/telegram.js'
+import { vnTimeOf } from '../lib/time.js'
 import { sendPushToUser } from '../lib/webpush.js'
 import { sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
 import { buttonsFor } from './actions.js'
+import { inQuietHours } from './materialize.js'
 import { plannedChannels } from './channels.js'
 import { notificationUrl, toTelegramHtml } from './messages.js'
 
@@ -64,8 +66,9 @@ async function stillRelevant(n: Notification): Promise<boolean> {
   return log === null
 }
 
-async function deliver(n: Notification): Promise<string[]> {
-  const user = await db.user.findUnique({ where: { id: n.userId } })
+type Recipient = NonNullable<Awaited<ReturnType<typeof db.user.findUnique>>>
+
+async function deliver(n: Notification, user: Recipient | null): Promise<string[]> {
   if (!user || !user.active) throw new Error('Người dùng không còn hoạt động')
 
   // Tổng kết ngày phải phản ánh trạng thái lúc gửi, không phải lúc sinh lịch.
@@ -130,7 +133,23 @@ export async function dispatchDue(now: Date = new Date()): Promise<DispatchResul
         result.cancelled++
         continue
       }
-      const channels = await deliver(n)
+      const user = await db.user.findUnique({ where: { id: n.userId } })
+
+      // Giờ yên lặng được kiểm ở ĐÂY nữa chứ không chỉ lúc sinh lịch: thông báo
+      // sinh trước tới 60 ngày, nên người vừa đặt giờ yên lặng hôm nay vẫn còn
+      // cả một kho nhắc cũ chốt giờ từ trước. Huỷ chứ không dời: giao diện hứa
+      // "nhắc rơi vào khoảng này sẽ không được gửi", mà việc đến hạn lúc 22h
+      // bắn lúc 6h sáng hôm sau thì cũng chẳng còn nghĩa gì.
+      if (user && inQuietHours(vnTimeOf(now), user.quietFrom, user.quietTo)) {
+        await db.notification.update({
+          where: { id: n.id },
+          data: { status: 'CANCELLED', error: 'rơi vào giờ yên lặng' },
+        })
+        result.cancelled++
+        continue
+      }
+
+      const channels = await deliver(n, user)
       await db.notification.update({
         where: { id: n.id },
         data: { status: 'SENT', sentAt: new Date(), channels, error: null },
