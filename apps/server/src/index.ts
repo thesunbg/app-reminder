@@ -5,6 +5,7 @@ import Fastify from 'fastify'
 import { db } from './db.js'
 import { env, isProd } from './env.js'
 import { registerExportRoute } from './export.js'
+import { registerIcalRoute } from './ical.js'
 import { registerAgentRoute } from './screen/route.js'
 import { registerStudyAttachmentRoute } from './study/attachment.js'
 import { startScheduler } from './notifications/scheduler.js'
@@ -40,6 +41,7 @@ await app.register(fastifyTRPCPlugin, {
 })
 
 await registerExportRoute(app)
+await registerIcalRoute(app)
 await registerAgentRoute(app)
 await registerStudyAttachmentRoute(app)
 

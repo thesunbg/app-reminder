@@ -11,6 +11,8 @@ import {
   materializeEvents,
   resolveLunarAnniversary,
 } from '../../notifications/events.js'
+import { env } from '../../env.js'
+import { hashIcalToken, newIcalToken } from '../../ical.js'
 import { protectedProcedure, router } from '../trpc.js'
 
 const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
@@ -361,6 +363,44 @@ export const eventRouter = router({
       }
       return out
     }),
+
+  /**
+   * Link đăng ký lịch: có hay chưa, tạo từ bao giờ, lần cuối phần mềm lịch nào
+   * đó tải về là khi nào. KHÔNG trả lại token — server chỉ giữ hash của nó.
+   */
+  icalStatus: protectedProcedure.query(async ({ ctx }) => {
+    const me = await db.user.findUniqueOrThrow({
+      where: { id: ctx.user.id },
+      select: { icalTokenHash: true, icalCreatedAt: true, icalLastUsedAt: true },
+    })
+    return {
+      enabled: Boolean(me.icalTokenHash),
+      createdAt: me.icalCreatedAt,
+      lastUsedAt: me.icalLastUsedAt,
+    }
+  }),
+
+  /**
+   * Tạo (hoặc tạo lại) link. Trả token thô ĐÚNG MỘT LẦN — tạo lại thì link cũ
+   * chết ngay, đó cũng là cách thu hồi khi lỡ gửi nhầm cho ai.
+   */
+  icalCreate: protectedProcedure.mutation(async ({ ctx }) => {
+    const token = newIcalToken()
+    await db.user.update({
+      where: { id: ctx.user.id },
+      data: { icalTokenHash: hashIcalToken(token), icalCreatedAt: new Date(), icalLastUsedAt: null },
+    })
+    // Cùng origin với web: Caddy đã có handle /calendar.ics trỏ sang server.
+    return { url: `${env.WEB_ORIGIN.replace(/\/$/, '')}/calendar.ics?token=${token}`, token }
+  }),
+
+  icalRevoke: protectedProcedure.mutation(async ({ ctx }) => {
+    await db.user.update({
+      where: { id: ctx.user.id },
+      data: { icalTokenHash: null, icalCreatedAt: null, icalLastUsedAt: null },
+    })
+    return { ok: true }
+  }),
 
   /**
    * Xem trước: ngày âm hàng tháng này rơi vào những ngày dương nào sắp tới.

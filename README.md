@@ -128,6 +128,20 @@ và giới hạn giờ giao cho Screen Time / Family Link ở tầng hệ điề
 > Con thấy đúng những gì bố mẹ thấy về máy mình, và tự gỡ máy được bất cứ lúc
 > nào. Hãy nói với con là máy có cài — lý do ở `docs/PLAN.md` mục 1.
 
+**Lịch cho iPhone / Google Calendar.** Cài đặt → "Lịch cho iPhone" tạo một link
+`/calendar.ics?token=…` để **đăng ký** (subscribe) trong lịch hệ thống: ngày
+giỗ, lễ tết, sinh nhật và chuyến đi hiện thẳng ở chỗ người trong nhà vẫn nhìn
+mỗi ngày, không cần cài app. Token chỉ hiện **một lần** (DB giữ SHA-256, giống
+Session và AgentDevice); tạo lại là thu hồi link cũ.
+
+Việc định kỳ cố ý **không** được xuất: chúng có nhắc trước, nhắc lại, tick xong
+— cả một vòng đời lịch hệ thống không hiểu — và đổ 6 việc mỗi ngày vào Lịch
+iPhone chỉ làm hỏng cái lịch đó.
+
+> Thêm route REST mới thì **phải** thêm một `handle` trong
+> [deploy/Caddyfile](deploy/Caddyfile), nếu không nó rơi xuống nhánh SPA và trả
+> `index.html` kèm mã 200 — phần mềm lịch nhận HTML và báo "lịch không hợp lệ".
+
 Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 - **2 bước**: TOTP chuẩn RFC 6238, tự viết ([lib/totp.ts](apps/server/src/lib/totp.ts)),
   bí mật mã hoá AES-GCM bằng `SESSION_SECRET`, 8 mã khôi phục lưu dạng hash.
@@ -208,6 +222,7 @@ apps/server/        Fastify + tRPC + Prisma
   src/lib/               time (múi giờ VN), recurrence (RRULE), session, password
   src/lib/lunar.ts       âm lịch VN (Hồ Ngọc Đức, UTC+7)
   src/lib/holidays.ts    danh mục lễ tết VN dựng sẵn (âm + dương), không vào DB
+  src/ical.ts            /calendar.ics — lịch .ics để đăng ký ở Lịch iPhone
   src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
   src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
   src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler,

@@ -110,6 +110,13 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
+  /// Link đăng ký lịch (.ics) cho Lịch iPhone / Google Calendar. DB chỉ giữ
+  /// SHA-256 của token, giống Session và AgentDevice — token thô chỉ hiện đúng
+  /// một lần lúc tạo, mất thì tạo lại (link cũ hết hiệu lực ngay).
+  icalTokenHash  String?   @unique
+  icalCreatedAt  DateTime?
+  icalLastUsedAt DateTime?
+
   // đăng nhập 2 bước (TOTP). Bí mật được mã hoá AES-GCM bằng SESSION_SECRET,
   // chỉ có hiệu lực khi totpEnabled = true (lúc đang thiết lập vẫn là false).
   totpSecret    String?

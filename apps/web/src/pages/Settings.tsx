@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CalendarFeed from '@/components/CalendarFeed'
 import NotifyLog from '@/components/NotifyLog'
 import NotifySettings from '@/components/NotifySettings'
 import ScreenTime from '@/components/ScreenTime'
@@ -79,6 +80,8 @@ export default function Settings() {
       </Card>
 
       <NotifySettings />
+
+      <CalendarFeed />
 
       {/* Máy tính của chính mình. Báo cáo về máy của con nằm ở Học tập →
           Máy tính; ở đây để phụ huynh (nhà có thể chưa có tài khoản con nào)
