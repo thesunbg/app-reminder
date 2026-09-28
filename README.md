@@ -18,6 +18,8 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 6 | Nhập bằng giọng nói + LLM | ❌ bỏ — chủ nhà quyết định không cần AI, chỉ cần nhắc theo lịch |
 | 7 | Push native (FCM) + vỏ Capacitor + local notification | ✅ code xong, **chưa build app lần nào** |
 | 8 | Agent máy tính: thời lượng dùng app, nhật ký tự động từ máy | ✅ xong |
+| 9 | **Tick việc trong Telegram**, mùng 1/rằm, lịch .ics, chuỗi ngày + huy hiệu | ✅ xong |
+| 10 | **Sổ sức khoẻ**, tìm kiếm toàn cục, nhắc thời khoá biểu, tổng kết tuần, offline | ✅ xong |
 
 Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ngày) / 60 ngày
 (giỗ, sinh nhật), gửi qua Telegram và/hoặc Web Push, tự huỷ khi bạn đã tick

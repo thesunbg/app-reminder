@@ -134,6 +134,42 @@ async function main() {
   const { materializeEventOccurrences } = await import('./notifications/events.js')
   await materializeEventOccurrences()
 
+  // ----- lễ tết & sức khoẻ: dữ liệu cho các tính năng mới -----
+
+  // mùng 1 hàng tháng (âm lịch) — ngày âm lặp theo tháng
+  await db.event.upsert({
+    where: { id: 'seed-mung-1' },
+    create: {
+      id: 'seed-mung-1', familyId: family.id, title: 'Thắp hương mùng 1',
+      type: 'OTHER', calendar: 'LUNAR_MONTHLY', lunarDay: 1,
+      remindBeforeDays: [1, 0], remindAtTime: '06:30',
+    },
+    update: {},
+  })
+
+  // sổ sức khoẻ của con: 6 lần đo + một mũi tiêm có hẹn lần sau
+  const growth: Array<[number, number, number]> = [
+    [-330, 128.0, 26.5], [-270, 129.4, 27.2], [-210, 130.9, 28.0],
+    [-150, 132.6, 29.1], [-90, 134.2, 30.3], [-30, 136.0, 31.4],
+  ]
+  for (const [offset, heightCm, weightKg] of growth) {
+    const date = addDays(vnToday(), offset)
+    const existing = await db.healthRecord.findFirst({ where: { userId: child.id, kind: 'GROWTH', date } })
+    if (!existing) {
+      await db.healthRecord.create({ data: { userId: child.id, kind: 'GROWTH', date, heightCm, weightKg } })
+    }
+  }
+  const shot = await db.healthRecord.findFirst({ where: { userId: child.id, kind: 'VACCINE' } })
+  if (!shot) {
+    await db.healthRecord.create({
+      data: {
+        userId: child.id, kind: 'VACCINE', date: addDays(vnToday(), -400),
+        title: 'Sởi – quai bị – rubella mũi 2', note: 'Trạm y tế phường',
+        nextDate: addDays(vnToday(), 12),
+      },
+    })
+  }
+
   console.log(`✅ Seed xong.
    Gia đình : ${family.name}
    Phụ huynh: ${PARENT_EMAIL} / ${PASSWORD}
