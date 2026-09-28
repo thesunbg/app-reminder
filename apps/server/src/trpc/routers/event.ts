@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { db } from '../../db.js'
+import { holidayDayMap } from '../../lib/holidays.js'
 import { lunarMonthLength, lunarOf, lunarToSolar, toSolarString } from '../../lib/lunar.js'
 import { addDays, dateRange, diffDays, vnToday } from '../../lib/time.js'
 import {
@@ -102,11 +103,27 @@ async function calendarRange(familyId: string, from: string, to: string) {
     }
   }
 
+  // Lễ tết đi kèm luôn trong cùng một lần gọi: lưới lịch nào cũng cần cả hai,
+  // tách ra thành query riêng thì tháng nào cũng hai vòng loading lệch nhau.
+  const holidays = holidayDayMap(from, to)
+
   return dateRange(from, to).map((date) => {
     const l = lunarOf(date)
     return {
       date,
       lunar: { day: l.day, month: l.month, year: l.year, leap: l.leap },
+      holidays: (holidays.get(date) ?? []).map((h) => ({
+        id: h.holiday.id,
+        title: h.holiday.title,
+        category: h.holiday.category,
+        calendar: h.holiday.calendar,
+        dayOff: Boolean(h.holiday.dayOff),
+        note: h.holiday.note ?? null,
+        startDate: h.startDate,
+        endDate: h.endDate,
+        dayIndex: h.dayIndex,
+        dayCount: h.dayCount,
+      })),
       events: (byDate.get(date) ?? []).map(({ occ: o, dayIndex, dayCount }) => ({
         occurrenceId: o.id,
         id: o.event.id,

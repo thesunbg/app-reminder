@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar, EmptyState, Spinner } from '@/components/ui'
 import { addDays, fullDate, minutesLabel, nowVnTime, relativeDay, today } from '@/lib/format'
+import { holidayMeta, lunarLabel } from '@/lib/holidays'
 import { trpc } from '@/lib/trpc'
 
 type Status = 'DONE' | 'PARTIAL' | 'SKIPPED'
@@ -40,6 +41,8 @@ export default function Today() {
           <button className="btn btn-ghost !px-3 text-xs" onClick={() => setDate(today())}>Hôm nay</button>
         )}
       </header>
+
+      <HolidayBanner date={date} />
 
       {items.length > 0 && (
         <div className="card mb-4 flex items-center gap-4 px-4 py-3">
@@ -133,6 +136,55 @@ export default function Today() {
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * Hôm nay có phải ngày lễ không. Chỉ hiện khi CÓ lễ — ngày thường thì màn hình
+ * Hôm nay phải để dành cho việc phải làm.
+ */
+function HolidayBanner({ date }: { date: string }) {
+  const q = trpc.holiday.on.useQuery({ date })
+  const rows = q.data ?? []
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mb-4 flex flex-col gap-2">
+      {rows.map((h) => {
+        const meta = holidayMeta(h.category)
+        return (
+          <div
+            key={h.id}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+            style={{
+              background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${meta.color} 30%, transparent)`,
+            }}
+          >
+            <span className="text-xl">{meta.icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold" style={{ color: meta.color }}>
+                {h.title}
+                {h.dayCount > 1 && (
+                  <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--muted)' }}>
+                    ngày {h.dayIndex}/{h.dayCount}
+                  </span>
+                )}
+              </p>
+              <p className="truncate text-xs" style={{ color: 'var(--muted)' }}>
+                {[
+                  h.dayOff ? 'được nghỉ' : meta.label,
+                  h.calendar === 'LUNAR' ? lunarLabel(h.lunar) : null,
+                  h.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -253,6 +253,25 @@ export default function NotifySettings() {
 
       <hr style={{ borderColor: 'var(--border)' }} />
 
+      {/* ---------- Nhắc lễ tết ---------- */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Dot on={s.notifyHolidays} />
+          <span className="flex-1 text-sm font-semibold">Nhắc lễ tết Việt Nam</span>
+          <Switch
+            checked={s.notifyHolidays}
+            onChange={(v) => savePrefs.mutate({ notifyHolidays: v })}
+            label="Bật nhắc lễ tết Việt Nam"
+          />
+        </div>
+        <p className="text-xs" style={{ color: 'var(--muted)' }}>
+          Tết Nguyên Đán, Ông Công Ông Táo, Trung Thu, Giỗ Tổ, 30/4, 2/9, 20/11… —
+          nhắc trước vài ngày, 8h sáng. Ngày lễ vẫn hiện trên lịch kể cả khi tắt.
+        </p>
+      </section>
+
+      <hr style={{ borderColor: 'var(--border)' }} />
+
       {/* ---------- Giờ yên lặng ---------- */}
       <QuietHours
         from={s.quietFrom}

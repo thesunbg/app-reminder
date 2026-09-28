@@ -3,6 +3,7 @@ import { authRouter } from './routers/auth.js'
 import { diaryRouter } from './routers/diary.js'
 import { eventRouter } from './routers/event.js'
 import { familyRouter } from './routers/family.js'
+import { holidayRouter } from './routers/holiday.js'
 import { noteRouter } from './routers/note.js'
 import { notifyRouter } from './routers/notify.js'
 import { routineRouter } from './routers/routine.js'
@@ -15,6 +16,7 @@ export const appRouter = router({
   diary: diaryRouter,
   event: eventRouter,
   family: familyRouter,
+  holiday: holidayRouter,
   note: noteRouter,
   notify: notifyRouter,
   routine: routineRouter,

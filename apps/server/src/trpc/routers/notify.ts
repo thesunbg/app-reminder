@@ -6,6 +6,7 @@ import { env } from '../../env.js'
 import { sendMessage, telegramEnabled, escapeHtml } from '../../lib/telegram.js'
 import { sendPushToUser, webPushEnabled } from '../../lib/webpush.js'
 import { fcmConfigError, fcmEnabled, sendNativeToUser } from '../../lib/fcm.js'
+import { clearHolidayNotifications, materializeHolidays } from '../../notifications/holidays.js'
 import { materializeRoutines } from '../../notifications/materialize.js'
 import { notificationUrl } from '../../notifications/messages.js'
 import { protectedProcedure, router } from '../trpc.js'
@@ -30,7 +31,7 @@ export const notifyRouter = router({
       where: { id: ctx.user.id },
       select: {
         telegramChatId: true, notifyTelegram: true, notifyWebPush: true,
-        notifyNative: true, quietFrom: true, quietTo: true,
+        notifyNative: true, notifyHolidays: true, quietFrom: true, quietTo: true,
         _count: { select: { pushDevices: true, nativeDevices: true } },
       },
     })
@@ -42,6 +43,7 @@ export const notifyRouter = router({
       notifyTelegram: me.notifyTelegram,
       notifyWebPush: me.notifyWebPush,
       notifyNative: me.notifyNative,
+      notifyHolidays: me.notifyHolidays,
       pushDevices: me._count.pushDevices,
       serverNativeReady: fcmEnabled(),
       nativeConfigError: fcmConfigError(),
@@ -184,6 +186,7 @@ export const notifyRouter = router({
         notifyTelegram: z.boolean().optional(),
         notifyWebPush: z.boolean().optional(),
         notifyNative: z.boolean().optional(),
+        notifyHolidays: z.boolean().optional(),
         quietFrom: timeSchema.nullish(),
         quietTo: timeSchema.nullish(),
       }),
@@ -199,6 +202,9 @@ export const notifyRouter = router({
       await db.user.update({ where: { id: ctx.user.id }, data: input })
       // đổi giờ yên lặng / bật kênh -> lịch thông báo phải sinh lại
       await materializeRoutines()
+      // tắt nhắc lễ: phải dọn 60 ngày đã sinh sẵn, không thì vẫn nổ đều
+      if (input.notifyHolidays === false) await clearHolidayNotifications(ctx.user.id)
+      if (input.notifyHolidays === true) await materializeHolidays()
       return { ok: true }
     }),
 

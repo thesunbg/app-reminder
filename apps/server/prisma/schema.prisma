@@ -92,6 +92,9 @@ model User {
   telegramLinkExpires DateTime?
   notifyTelegram      Boolean   @default(true)
   notifyWebPush       Boolean   @default(true)
+  /// Nhắc lễ tết Việt Nam (Tết, Trung Thu, Giỗ Tổ, 2/9...). Danh mục dựng sẵn
+  /// trong `lib/holidays.ts`, không có hàng nào trong DB — đây chỉ là công tắc.
+  notifyHolidays      Boolean   @default(true)
   /// Push native qua FCM (app Capacitor trên iOS/Android)
   notifyNative        Boolean   @default(true)
   /// Giờ VN gửi tổng kết cuối ngày kèm lời nhắc viết nhật ký. null = tắt.

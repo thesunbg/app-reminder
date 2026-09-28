@@ -1,6 +1,7 @@
 import { dispatchDue, releaseStuck } from './dispatch.js'
 import { materializeDigests } from '../diary/digest.js'
 import { materializeEventOccurrences, materializeEvents } from './events.js'
+import { materializeHolidays } from './holidays.js'
 import { materializeRoutines } from './materialize.js'
 import { materializeHomework } from './homework.js'
 import { materializeNotes } from './notes.js'
@@ -44,11 +45,12 @@ export function startScheduler(log: { info: (o: unknown, m?: string) => void; er
     // occurrence phải sinh trước thì materializeEvents mới có gì để đọc
     const occurrences = await materializeEventOccurrences()
     const events = await materializeEvents()
+    const holidays = await materializeHolidays()
     const notes = await materializeNotes()
     const homework = await materializeHomework()
     const digests = await materializeDigests()
-    if (routines + occurrences + events + notes + homework + digests > 0) {
-      log.info({ routines, occurrences, events, notes, homework, digests }, 'sinh thông báo mới')
+    if (routines + occurrences + events + holidays + notes + homework + digests > 0) {
+      log.info({ routines, occurrences, events, holidays, notes, homework, digests }, 'sinh thông báo mới')
     }
   })
 

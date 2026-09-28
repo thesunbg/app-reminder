@@ -9,7 +9,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 |---|---|---|
 | 0 | Monorepo, DB, auth, model gia đình | ✅ xong |
 | 1 | Việc định kỳ + checklist + thống kê + **engine nhắc + Telegram + Web Push** | ✅ xong |
-| 2 | Giỗ âm lịch / sinh nhật / **sự kiện nhiều ngày có giờ** + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện | ✅ xong |
+| 2 | Giỗ âm lịch / sinh nhật / **sự kiện nhiều ngày có giờ** + nhắc trước N ngày; **lịch tháng dương ↔ âm** có sự kiện; **lễ tết Việt Nam dựng sẵn** | ✅ xong |
 | 3 | Ghi chú kiểu Keep (bao gồm nhắc bảo dưỡng) | ✅ xong |
 | 3b | Nhật ký (viết tay + tự tổng hợp) | ✅ xong |
 | 3c | Đăng nhập 2 bước (TOTP), passkey (WebAuthn), tải dữ liệu JSON | ✅ xong |
@@ -49,6 +49,32 @@ Giỗ âm lịch không có ngày kết thúc: một ngày giỗ là một ngày
 (chuyến đi, lịch hẹn, sinh nhật) đều theo dương; âm lịch để dành cho giỗ chạp.
 Bấm "+ Thêm sự kiện ngày 3/10" ngay trong ô ngày ở trang Lịch thì form mở ra với
 ngày đó điền sẵn và ở chế độ "một lần" (`/su-kien?ngay=YYYY-MM-DD`).
+
+**Lễ tết Việt Nam có sẵn, không phải gõ.** Tết Nguyên Đán, Ông Công Ông Táo,
+Tất niên, Rằm tháng Giêng, Hàn thực, Giỗ Tổ Hùng Vương, Phật Đản, Đoan Ngọ,
+Vu Lan, Trung Thu… (âm lịch) cùng 1/1, 8/3, 30/4, 1/5, 2/9, 20/10, 20/11,
+Giáng sinh… (dương lịch) — danh mục ở
+[lib/holidays.ts](apps/server/src/lib/holidays.ts).
+
+- **Không nằm trong DB.** Ngày lễ là của chung, năm nào cũng có và không nhà
+  nào sửa; chép vào bảng `Event` thì mỗi gia đình lại có một bản sao, thêm lễ
+  mới phải viết migration, và danh sách sự kiện của nhà bị hai chục dòng không
+  phải của mình làm loãng. Ngày âm được quy đổi tại chỗ bằng đúng `lunar.ts`
+  đang tính ngày giỗ, nên Tết trên lịch và Tết trong thông báo không thể lệch
+  nhau — kể cả năm nhuận (Vu Lan 2025 rơi vào 6/9 vì nhuận tháng 6).
+- **Ba nhóm**: `PUBLIC` được nghỉ (đỏ trên lịch, như chủ nhật), `TRADITIONAL`
+  lễ tết cổ truyền (cam), `OBSERVANCE` ngày kỷ niệm vẫn đi làm (xám).
+- **Hiện ở**: ô ngày và chi tiết ngày trên trang Lịch (cả lịch dương lẫn âm),
+  một thẻ "Lễ tết Việt Nam" ở trang Sự kiện kèm danh sách cả năm gom theo
+  tháng, và một dải báo trên màn hình Hôm nay khi hôm nay là ngày lễ.
+- **Nhắc**: chỉ những ngày thật sự phải chuẩn bị mới bắn thông báo
+  (`remind: true` trong danh mục) — Tết trước 14 ngày, Trung Thu và 20/11
+  trước một tuần, còn lại trước 1–3 ngày, 8h sáng, gửi **cả nhà** chứ không
+  riêng phụ huynh. Tắt ở Cài đặt → Nhắc lễ tết Việt Nam; tắt rồi thì lịch nhắc
+  đã sinh sẵn cũng bị dọn, nhưng ngày lễ vẫn hiện trên lịch.
+
+Tất niên ghi là "30 tháng Chạp" và tự lùi về 29 ở năm tháng Chạp thiếu — cùng
+một quy ước dân gian với ngày giỗ 30, dùng chung hàm `resolveLunarAnniversary`.
 
 **Sinh nhật đi thẳng từ hồ sơ thành viên.** Khai `birthday` trong Cài đặt →
 Gia đình là có ngay một `Event` gắn với người đó qua `birthdayUserId` (một
@@ -158,13 +184,14 @@ apps/server/        Fastify + tRPC + Prisma
   prisma/schema.prisma   toàn bộ model
   src/lib/               time (múi giờ VN), recurrence (RRULE), session, password
   src/lib/lunar.ts       âm lịch VN (Hồ Ngọc Đức, UTC+7)
+  src/lib/holidays.ts    danh mục lễ tết VN dựng sẵn (âm + dương), không vào DB
   src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
   src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
   src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler
   src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
   src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
-  src/trpc/routers/      auth, family, routine, event, note, diary, notify,
-                         stats, study, screen
+  src/trpc/routers/      auth, family, routine, event, holiday, note, diary,
+                         notify, stats, study, screen
 apps/web/           React 19 + Vite + Tailwind 4 + PWA
   src/pages/             Today, Week, Diary, Notes, Events, Calendar, Stats,
                          Study, Routines, Settings, Login
@@ -191,7 +218,8 @@ như "floating date" để thứ trong tuần luôn khớp lịch VN.
 
 **Âm lịch.** Đã làm ở [lib/lunar.ts](apps/server/src/lib/lunar.ts) bằng thuật
 toán Hồ Ngọc Đức (UTC+7). **Đừng thay bằng thư viện lịch Trung Quốc**: chúng
-dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm.
+dùng UTC+8 và sẽ báo sai ngày giỗ ở một số năm. Mọi thứ cần ngày âm — giỗ, lễ
+tết, lưới lịch — đều đi qua file này; client không tự quy đổi bao giờ.
 
 **Phân quyền.** Hai trục tách rời nhau:
 

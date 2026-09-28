@@ -1,6 +1,6 @@
 import type { Event } from '@prisma/client'
 import { db } from '../db.js'
-import { lunarMonthLength, lunarOf, lunarToSolar, toSolarString } from '../lib/lunar.js'
+import { lunarOf, resolveLunarAnniversary } from '../lib/lunar.js'
 import { addDays, diffDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { inQuietHours } from './materialize.js'
 import { plannedChannels } from './channels.js'
@@ -12,27 +12,9 @@ const YEAR_SPAN = [-1, 0, 1, 2] as const
 
 export const eventRef = (eventId: string, solarDate: string) => `${eventId}:${solarDate}`
 
-/**
- * Quy đổi một ngày giỗ âm lịch sang dương lịch cho một năm âm cụ thể.
- *
- * Hai quy ước dân gian được áp dụng ở đây:
- *  - Ngày 30 ở tháng thiếu (chỉ 29 ngày) thì cúng ngày 29, không bỏ.
- *  - Ghi là tháng nhuận nhưng năm đó không nhuận thì cúng ở tháng thường
- *    cùng số — không bỏ giỗ.
- */
-export function resolveLunarAnniversary(
-  lunarDay: number,
-  lunarMonth: number,
-  wantLeap: boolean,
-  lunarYear: number,
-): string | null {
-  const leap = wantLeap && lunarToSolar(1, lunarMonth, lunarYear, true) !== null
-  const len = lunarMonthLength(lunarMonth, lunarYear, leap)
-  if (len === 0) return null
-  const day = Math.min(lunarDay, len)
-  const solar = lunarToSolar(day, lunarMonth, lunarYear, leap)
-  return solar ? toSolarString(solar) : null
-}
+// Quy đổi ngày âm lịch lặp hàng năm nằm ở lib/lunar.ts (dùng chung với lễ tết);
+// vẫn xuất lại ở đây vì nó là một phần của "API sự kiện" mà router và test dùng.
+export { resolveLunarAnniversary }
 
 /**
  * Gắn một ngày "MM-DD" (hoặc "YYYY-MM-DD", phần năm bị bỏ) vào một năm dương.

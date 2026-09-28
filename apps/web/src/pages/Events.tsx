@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Card, EmptyState, ErrorNote, Spinner } from '@/components/ui'
-import { fullDate, weekdayShort } from '@/lib/format'
-import { trpc } from '@/lib/trpc'
+import { fullDate, today, weekdayShort } from '@/lib/format'
+import { holidayMeta, holidaySpan, lunarLabel } from '@/lib/holidays'
+import { trpc, type RouterOutputs } from '@/lib/trpc'
 
 type Calendar = 'LUNAR' | 'SOLAR'
 type EventType = 'DEATH_ANNIVERSARY' | 'BIRTHDAY' | 'OTHER'
@@ -134,8 +135,10 @@ export default function Events() {
         </Card>
       )}
 
+      <HolidaySection />
+
       <h2 className="mb-2 mt-4 text-sm font-semibold" style={{ color: 'var(--muted)' }}>
-        Tất cả ({list.data?.length ?? 0})
+        Của nhà mình ({list.data?.length ?? 0})
       </h2>
       <ul className="flex flex-col gap-2">
         {(list.data ?? []).map((e) => {
@@ -190,6 +193,137 @@ export default function Events() {
           hint="Thêm ngày giỗ theo âm lịch, sinh nhật theo dương lịch, hoặc một sự kiện có ngày cụ thể như chuyến đi 3–4/10 — app sẽ nhắc trước nhiều ngày."
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * Lễ tết Việt Nam — danh mục dựng sẵn của app, không phải sự kiện của nhà nên
+ * không có nút sửa/xoá. Ai muốn một ngày riêng (giỗ, chuyến đi) thì thêm sự
+ * kiện ở trên.
+ */
+function HolidaySection() {
+  const [openYear, setOpenYear] = useState(false)
+  const year = Number(today().slice(0, 4))
+  const upcoming = trpc.holiday.upcoming.useQuery({ days: 365, limit: 6 })
+  const all = trpc.holiday.year.useQuery({ year }, { enabled: openYear })
+
+  const rows = upcoming.data ?? []
+  if (rows.length === 0 && !openYear) return null
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">🏮 Lễ tết Việt Nam</h2>
+        <button className="btn btn-ghost !px-2.5 !py-1.5 text-xs" onClick={() => setOpenYear((v) => !v)}>
+          {openYear ? 'Thu gọn' : `Cả năm ${year}`}
+        </button>
+      </div>
+
+      {!openYear && (
+        <ul className="flex flex-col gap-3">
+          {rows.map((h) => (
+            <li key={`${h.id}-${h.startDate}`} className="flex items-center gap-3">
+              <div
+                className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl"
+                style={{ background: 'var(--surface-2)' }}
+              >
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--muted)' }}>
+                  {weekdayShort(h.startDate)}
+                </span>
+                <span className="text-sm font-bold leading-none">{dm(h.startDate)}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {holidayMeta(h.category).icon} {h.title}
+                </p>
+                <p className="truncate text-xs" style={{ color: 'var(--muted)' }}>
+                  {[
+                    h.dayOff ? 'được nghỉ' : null,
+                    h.calendar === 'LUNAR' ? lunarLabel(h.lunar) : null,
+                    h.dayCount > 1 ? `${holidaySpan(h.startDate, h.endDate)} · ${h.dayCount} ngày` : null,
+                    h.note,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              </div>
+              <span
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold"
+                style={
+                  h.ongoing || h.daysUntil <= 3
+                    ? { background: 'color-mix(in srgb, var(--warn) 18%, transparent)', color: 'var(--warn)' }
+                    : { color: 'var(--muted)' }
+                }
+              >
+                {h.ongoing
+                  ? h.dayCount > 1
+                    ? `Đang diễn ra · ngày ${h.dayIndex}/${h.dayCount}`
+                    : 'Hôm nay'
+                  : daysLabel(h.daysUntil)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {openYear && (all.isLoading ? <Spinner /> : <YearList rows={all.data ?? []} />)}
+
+      <p className="mt-3 text-xs" style={{ color: 'var(--muted)' }}>
+        Ngày âm lịch được quy đổi cho từng năm, nên Tết và Trung Thu luôn đúng ngày.
+        Bật/tắt nhắc ở Cài đặt → Nhắc nhở.
+      </p>
+    </Card>
+  )
+}
+
+/** Cả năm, gom theo tháng dương — nhìn một phát thấy tháng nào có gì. */
+function YearList({ rows }: { rows: RouterOutputs['holiday']['year'] }) {
+  const t = today()
+  const months = new Map<number, typeof rows>()
+  for (const h of rows) {
+    const m = Number(h.startDate.slice(5, 7))
+    months.set(m, [...(months.get(m) ?? []), h])
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {[...months.entries()].map(([month, list]) => (
+        <div key={month}>
+          <p className="mb-1 text-xs font-semibold" style={{ color: 'var(--muted)' }}>Tháng {month}</p>
+          <ul className="flex flex-col gap-1">
+            {list.map((h) => {
+              const meta = holidayMeta(h.category)
+              const past = (h.endDate ?? h.startDate) < t
+              return (
+                <li
+                  key={`${h.id}-${h.startDate}`}
+                  className="flex items-baseline gap-2 text-sm"
+                  style={past ? { opacity: 0.5 } : undefined}
+                >
+                  <span className="w-16 shrink-0 tabular-nums text-xs" style={{ color: 'var(--muted)' }}>
+                    {holidaySpan(h.startDate, h.endDate)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {meta.icon} {h.title}
+                    {h.calendar === 'LUNAR' && (
+                      <span className="ml-1.5 text-xs" style={{ color: 'var(--muted)' }}>{lunarLabel(h.lunar)}</span>
+                    )}
+                  </span>
+                  {h.dayOff && (
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                      style={{ background: 'color-mix(in srgb, var(--danger) 15%, transparent)', color: 'var(--danger)' }}
+                    >
+                      nghỉ
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }
