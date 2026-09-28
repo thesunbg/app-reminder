@@ -3,6 +3,7 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
+import Streaks from '@/components/Streaks'
 import { Avatar, Card, Spinner, StatTile } from '@/components/ui'
 import { addDays, dayMonth, minutesLabel, today } from '@/lib/format'
 import { trpc } from '@/lib/trpc'
@@ -90,6 +91,8 @@ export default function Stats() {
         <StatTile label="Chuỗi ngày" value={d.streak} unit="ngày" tone="ok" />
         <StatTile label="Việc đã làm" value={d.totalDone} unit={`/${d.totalDue}`} />
       </div>
+
+      <Streaks ownerId={ownerId} />
 
       <Card className="mb-4 p-4">
         <div className="mb-3 flex items-baseline justify-between">

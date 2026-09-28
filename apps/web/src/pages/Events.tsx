@@ -469,7 +469,7 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
                 </button>
               ))}
               <select
-                className="input-base !w-24"
+                className="input-base !w-28"
                 value={lunarDay}
                 onChange={(e) => setLunarDay(Number(e.target.value))}
                 aria-label="Ngày âm khác"

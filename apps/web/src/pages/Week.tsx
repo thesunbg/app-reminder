@@ -11,7 +11,7 @@ export default function Week() {
     onSuccess: () => {
       void utils.routine.week.invalidate()
       void utils.routine.day.invalidate()
-      void utils.stats.summary.invalidate()
+      void utils.stats.invalidate()
     },
   })
 

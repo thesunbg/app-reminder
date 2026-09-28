@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { StreakFlame } from '@/components/Streaks'
 import { Avatar, EmptyState, Spinner } from '@/components/ui'
 import { addDays, fullDate, minutesLabel, nowVnTime, relativeDay, today } from '@/lib/format'
 import { holidayMeta, lunarLabel } from '@/lib/holidays'
@@ -12,11 +13,14 @@ export default function Today() {
   const utils = trpc.useUtils()
   const day = trpc.routine.day.useQuery({ date })
   const me = trpc.auth.me.useQuery()
+  // chuỗi liên tiếp: một truy vấn cho cả trang, ghép theo routineId ở client
+  const streaks = trpc.stats.streaks.useQuery()
+  const streakOf = new Map((streaks.data ?? []).map((s) => [s.routineId, s]))
 
   const mark = trpc.routine.mark.useMutation({
     onSuccess: () => {
       void utils.routine.day.invalidate()
-      void utils.stats.summary.invalidate()
+      void utils.stats.invalidate()
       void utils.routine.week.invalidate()
     },
   })
@@ -112,7 +116,13 @@ export default function Today() {
               <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: routine.color }} />
 
               <div className="min-w-0 flex-1">
-                <p className={`truncate font-semibold ${status === 'DONE' ? 'line-through' : ''}`}>{routine.title}</p>
+                <p className={`flex items-center gap-1.5 truncate font-semibold ${status === 'DONE' ? 'line-through' : ''}`}>
+                  <span className="truncate">{routine.title}</span>
+                  {(() => {
+                    const s = streakOf.get(routine.id)
+                    return s ? <StreakFlame streak={s} /> : null
+                  })()}
+                </p>
                 <p className="flex items-center gap-1.5 text-xs" style={{ color: overdue ? 'var(--warn)' : 'var(--muted)' }}>
                   <span className="tabular-nums">{routine.timeOfDay}</span>
                   <span>·</span>
