@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { after, before, beforeEach, describe, it } from 'node:test'
 import { db } from '../src/db.js'
 import { MILESTONES, buildStreaks } from '../src/stats/streaks.js'
-import { addDays, vnToday } from '../src/lib/time.js'
+import { addDays, isoWeekday, vnToday } from '../src/lib/time.js'
 
 const MARK = `st-${Date.now()}`
 let familyId = ''
@@ -118,15 +118,18 @@ describe('chuỗi liên tiếp', () => {
   })
 
   it('việc hàng tuần đếm theo LẦN chứ không theo ngày', async () => {
-    // thứ 2 hàng tuần: 4 lần liên tiếp = 4 tuần
-    const monday = (weeksAgo: number) => {
-      let d = addDays(today, -7 * weeksAgo)
-      while (new Date(`${d}T00:00:00Z`).getUTCDay() !== 1) d = addDays(d, -1)
-      return d
+    // Thứ 2 gần nhất TÍNH CẢ HÔM NAY, rồi lùi k tuần. Phải neo như vậy chứ
+    // không phải "hôm nay trừ 7×k": nếu hôm nay là thứ 3 thì cách kia bỏ sót
+    // đúng thứ 2 hôm qua, mốc gần nhất thành chưa tick và chuỗi về 0 — test
+    // đang xanh sẽ đỏ vào một ngày nào đó trong tuần mà không ai hiểu vì sao.
+    const lastMonday = (weeksAgo: number) => {
+      let d = today
+      while (isoWeekday(d) !== 1) d = addDays(d, -1)
+      return addDays(d, -7 * weeksAgo)
     }
-    const start = addDays(monday(8), 0)
+    const start = lastMonday(8)
     const r = await makeRoutine('FREQ=WEEKLY;BYDAY=MO', start)
-    await tick(r.id, [monday(1), monday(2), monday(3), monday(4)])
+    await tick(r.id, [lastMonday(0), lastMonday(1), lastMonday(2), lastMonday(3)])
 
     const [s] = await buildStreaks(familyId, childId)
     assert.equal(s?.daily, false, 'việc hàng tuần không được gọi là "ngày"')
