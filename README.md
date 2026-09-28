@@ -24,8 +24,17 @@ Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ng�
 xong, tự thử lại khi gửi hỏng.
 
 Có thêm tổng kết cuối ngày (tuỳ chọn, tự đặt giờ): điểm lại hôm nay làm được
-gì và nhắc viết nhật ký. Đây là loại thông báo duy nhất có nội dung tính **lúc
-gửi** thay vì lúc sinh lịch — ngày chưa xảy ra thì chưa biết bạn làm được gì.
+gì và nhắc viết nhật ký. Cùng với **tổng kết tuần** (tối chủ nhật, mặc định
+tắt), đây là hai loại thông báo có nội dung tính **lúc gửi** thay vì lúc sinh
+lịch — ngày/tuần chưa xảy ra thì chưa biết làm được gì. Tổng kết tuần trả lời
+câu phụ huynh thật sự hỏi: tuần này ai đuối, bài nào còn nợ, tuần tới có gì
+phải chuẩn bị; con chỉ thấy phần của mình, đúng quyền xem trong app.
+
+**Nhắc thời khoá biểu** (mặc định 20:00): tối hôm trước liệt kê các tiết của
+ngày mai để soạn cặp — thứ con quên nhiều nhất không phải bài tập mà là mang
+đúng sách vở. Chỉ bắn khi hôm sau **thật sự có tiết**, nên người lớn bật sẵn
+cũng không nhận gì, và **bỏ qua ngày nghỉ lễ** (dùng lại danh mục lễ tết: nhắc
+soạn cặp cho ngày Quốc khánh thì lần sau con sẽ bỏ qua mọi thông báo của app).
 
 Nhắc sự kiện chỉ gửi cho thành viên **phụ huynh** — giỗ chạp và sinh nhật là
 việc người lớn chuẩn bị, không cần dựng con dậy lúc 8h sáng.

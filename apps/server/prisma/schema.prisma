@@ -52,7 +52,10 @@ enum NotificationKind {
   NOTE_AHEAD
   NOTE_DUE
   DAILY_DIGEST
+  WEEKLY_DIGEST
   HOMEWORK_DUE
+  /// "Mai thứ 4: Toán, Lý, Thể dục" — nhắc chuẩn bị sách vở theo thời khoá biểu
+  CLASS_TOMORROW
 }
 
 enum NotificationStatus {
@@ -102,6 +105,12 @@ model User {
   notifyNative        Boolean   @default(true)
   /// Giờ VN gửi tổng kết cuối ngày kèm lời nhắc viết nhật ký. null = tắt.
   dailyDigestAt       String?
+  /// Giờ VN gửi tổng kết TUẦN (tối chủ nhật). null = tắt. Chỉ phụ huynh dùng.
+  weeklyDigestAt      String?
+  /// Giờ VN tối hôm trước nhắc thời khoá biểu ngày mai. null = tắt.
+  /// Chỉ bắn khi hôm sau thật sự có tiết — người lớn không có thời khoá biểu
+  /// nên bật sẵn cũng không phiền ai.
+  classReminderAt     String?   @default("20:00")
   // giờ yên lặng (giờ VN) — không bắn thông báo trong khoảng này
   quietFrom           String?   // "22:30"
   quietTo             String?   // "06:00"

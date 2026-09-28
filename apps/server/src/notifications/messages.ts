@@ -34,8 +34,9 @@ export function toTelegramHtml(d: Draft): string {
  */
 export function notificationUrl(n: { kind: NotificationKind; refTable: string }): string {
   if (n.kind === 'DAILY_DIGEST') return '/nhat-ky'
+  if (n.kind === 'WEEKLY_DIGEST') return '/thong-ke'
   if (n.refTable === 'note') return '/ghi-chu'
   if (n.refTable === 'event' || n.refTable === 'holiday') return '/su-kien'
-  if (n.refTable === 'homework') return '/hoc-tap'
+  if (n.refTable === 'homework' || n.refTable === 'class') return '/hoc-tap'
   return '/'
 }

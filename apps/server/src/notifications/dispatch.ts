@@ -5,6 +5,7 @@ import { vnTimeOf } from '../lib/time.js'
 import { sendPushToUser } from '../lib/webpush.js'
 import { sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
+import { buildWeekly, weekFromRef } from '../diary/weekly.js'
 import { buttonsFor } from './actions.js'
 import { inQuietHours } from './materialize.js'
 import { plannedChannels } from './channels.js'
@@ -78,6 +79,15 @@ async function deliver(n: Notification, user: Recipient | null): Promise<string[
     const date = n.refId.split(':')[1]
     if (date) {
       const fresh = await buildDigest(user.id, date)
+      title = fresh.title
+      body = fresh.body
+      await db.notification.update({ where: { id: n.id }, data: { title, body } })
+    }
+  }
+  if (n.kind === 'WEEKLY_DIGEST') {
+    const week = weekFromRef(n.refId)
+    if (week) {
+      const fresh = await buildWeekly(user.id, week)
       title = fresh.title
       body = fresh.body
       await db.notification.update({ where: { id: n.id }, data: { title, body } })
