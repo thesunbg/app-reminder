@@ -4,6 +4,7 @@ import { StreakFlame } from '@/components/Streaks'
 import { Avatar, EmptyState, Spinner } from '@/components/ui'
 import { addDays, fullDate, minutesLabel, nowVnTime, relativeDay, today } from '@/lib/format'
 import { holidayMeta, lunarLabel } from '@/lib/holidays'
+import { enqueueMark, isOnline } from '@/lib/offline'
 import { trpc } from '@/lib/trpc'
 
 type Status = 'DONE' | 'PARTIAL' | 'SKIPPED'
@@ -24,6 +25,37 @@ export default function Today() {
       void utils.routine.week.invalidate()
     },
   })
+
+  /**
+   * Tick khi mất mạng: xếp hàng rồi vẽ ngay kết quả vào cache, để con tick
+   * xong thấy dấu ✓ chứ không thấy một lỗi mạng. Hàng đợi được gửi lại khi có
+   * mạng (useOutboxFlush ở App).
+   */
+  const markTask = (routineId: string, status: Status) => {
+    if (isOnline()) {
+      mark.mutate({ routineId, date, status })
+      return
+    }
+    enqueueMark({ routineId, date, status })
+    utils.routine.day.setData({ date }, (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        items: old.items.map((it) =>
+          it.routine.id !== routineId
+            ? it
+            : {
+                ...it,
+                // bấm lại đúng trạng thái đang có = bỏ tick, y như server làm
+                log:
+                  it.log?.status === status
+                    ? null
+                    : ({ ...(it.log ?? {}), status, date, routineId } as typeof it.log),
+              },
+        ),
+      }
+    })
+  }
 
   const items = day.data?.items ?? []
   const done = items.filter((i) => i.log?.status === 'DONE').length
@@ -91,7 +123,7 @@ export default function Today() {
               }
             >
               <button
-                onClick={() => mark.mutate({ routineId: routine.id, date, status: 'DONE' })}
+                onClick={() => markTask(routine.id, 'DONE')}
                 disabled={pending || !canEdit}
                 aria-label={
                   lockedBy
@@ -138,8 +170,8 @@ export default function Today() {
 
               {canEdit && (
                 <div className="flex gap-1">
-                  <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'PARTIAL' })} disabled={pending}>½</MiniBtn>
-                  <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => mark.mutate({ routineId: routine.id, date, status: 'SKIPPED' })} disabled={pending}>–</MiniBtn>
+                  <MiniBtn active={status === 'PARTIAL'} title="Làm dở" onClick={() => markTask(routine.id, 'PARTIAL')} disabled={pending}>½</MiniBtn>
+                  <MiniBtn active={status === 'SKIPPED'} title="Bỏ qua" onClick={() => markTask(routine.id, 'SKIPPED')} disabled={pending}>–</MiniBtn>
                 </div>
               )}
             </li>

@@ -1,6 +1,8 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Spinner } from '@/components/ui'
+import { clearOfflineData } from '@/lib/offline'
+import { useOutboxFlush } from '@/lib/useOutbox'
 import { trpc } from '@/lib/trpc'
 import { useNativeBridge } from '@/lib/useNativeBridge'
 import Login from '@/pages/Login'
@@ -43,6 +45,23 @@ const TABS = [
 
 export default function App() {
   const me = trpc.auth.me.useQuery()
+
+  /**
+   * Hết phiên (hoặc đăng xuất ở máy khác) thì XOÁ ảnh chụp cache trên máy này.
+   * Không có bước này thì trên máy dùng chung, người mở app tiếp theo vẫn thấy
+   * việc và ghi chú của nhà trước khi màn hình đăng nhập kịp hiện ra.
+   */
+  const wiped = useRef(false)
+  useEffect(() => {
+    if (me.data) {
+      wiped.current = false
+      return
+    }
+    if (me.isSuccess && me.data === null && !wiped.current) {
+      wiped.current = true
+      clearOfflineData()
+    }
+  }, [me.isSuccess, me.data])
   // Trong app điện thoại: đăng ký token push và gương lịch nhắc xuống máy.
   // Ở trình duyệt thì hook này không làm gì.
   useNativeBridge(Boolean(me.data))
@@ -82,6 +101,7 @@ export default function App() {
       </nav>
 
       <main className="min-w-0 flex-1">
+        <OfflineBar />
         <Routes>
           <Route path="/" element={<Today />} />
           <Route path="/tuan" element={<Week />} />
@@ -101,6 +121,39 @@ export default function App() {
 
       {/* Thanh tab dưới trên mobile */}
       <MobileNav />
+    </div>
+  )
+}
+
+/**
+ * Dải báo mất mạng + số thay đổi đang chờ gửi.
+ *
+ * Không có nó thì người dùng tick xong, thấy dấu ✓, rồi tưởng đã xong — trong
+ * khi thật ra vẫn nằm trong hàng đợi trên máy. Nói thẳng là cách duy nhất giữ
+ * được lòng tin vào những dấu tick đó.
+ */
+function OfflineBar() {
+  const { pending, online } = useOutboxFlush()
+  if (online && pending.length === 0) return null
+
+  const text = !online
+    ? pending.length > 0
+      ? `Đang ngoại tuyến · ${pending.length} thay đổi sẽ gửi khi có mạng`
+      : 'Đang ngoại tuyến · vẫn tick việc được, app gửi sau'
+    : `Đang gửi ${pending.length} thay đổi…`
+
+  return (
+    <div
+      className="px-4 py-2 text-center text-xs font-semibold"
+      style={{
+        background: online
+          ? 'color-mix(in srgb, var(--brand) 14%, transparent)'
+          : 'color-mix(in srgb, var(--warn) 16%, transparent)',
+        color: online ? 'var(--brand)' : 'var(--warn)',
+      }}
+      role="status"
+    >
+      {online ? '↻' : '⚠'} {text}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import CalendarFeed from '@/components/CalendarFeed'
 import NotifyLog from '@/components/NotifyLog'
@@ -6,12 +7,14 @@ import ScreenTime from '@/components/ScreenTime'
 import SecuritySettings from '@/components/SecuritySettings'
 import { Avatar, Card, ErrorNote, Spinner } from '@/components/ui'
 import { clearLocalNotifications } from '@/lib/native'
+import { clearOfflineData } from '@/lib/offline'
 import { trpc, type RouterOutputs } from '@/lib/trpc'
 
 const COLORS = ['#4f46e5', '#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#0891b2', '#7c3aed', '#db2777']
 
 export default function Settings() {
   const utils = trpc.useUtils()
+  const queryClient = useQueryClient()
   const me = trpc.auth.me.useQuery()
   const members = trpc.family.members.useQuery()
   const logout = trpc.auth.logout.useMutation({
@@ -20,7 +23,15 @@ export default function Settings() {
       // gì về phiên đăng nhập. Không xoá thì máy vẫn nhắc việc của người vừa
       // đăng xuất — trên máy dùng chung là người khác đọc được.
       void clearLocalNotifications()
-      void utils.invalidate()
+      // Ảnh chụp cache offline chứa dữ liệu cả nhà; để lại trên máy dùng chung
+      // là người kế tiếp mở app thấy luôn mà không cần đăng nhập.
+      clearOfflineData()
+      // resetQueries chứ không phải invalidate hay clear:
+      //  - invalidate chỉ đánh dấu cũ, DỮ LIỆU VẪN NẰM ĐÓ cho người tiếp theo;
+      //  - clear xoá sạch nhưng KHÔNG tự nạp lại, giao diện kẹt ở màn hình cũ
+      //    cho tới khi người dùng tự tải lại trang.
+      // reset vừa bỏ dữ liệu vừa nạp lại, nên app rơi về màn hình đăng nhập ngay.
+      void queryClient.resetQueries()
     },
   })
   const [adding, setAdding] = useState(false)

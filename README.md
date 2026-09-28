@@ -124,6 +124,25 @@ trước tới 60 ngày nên người vừa đặt giờ yên lặng hôm nay v�
 nhắc chốt giờ từ trước; rơi vào khoảng đó thì bị huỷ, không dời sang sáng hôm
 sau (việc đến hạn 22h mà bắn lúc 6h thì chẳng còn nghĩa gì).
 
+**Dùng được khi mất mạng** (màn hình Hôm nay). Hai nửa tách bạch:
+
+- **đọc**: ảnh chụp cache react-query trong localStorage, hạn 24 giờ, chỉ giữ
+  vài truy vấn nhẹ — mở app lúc không có mạng vẫn thấy việc hôm nay thay vì
+  màn hình trắng (service worker lo phần vỏ app);
+- **ghi**: tick việc lúc mất mạng thì vào hàng đợi rồi gửi lại khi có mạng,
+  kèm dải báo "1 thay đổi sẽ gửi khi có mạng" — không nói thì người ta tick
+  xong, thấy dấu ✓ và tưởng đã xong.
+
+Hàng đợi giữ **nguyên thứ tự và không gộp**: bấm "Xong" hai lần nghĩa là tick
+rồi bỏ tick, gộp lại còn một lần thì kết quả cuối cùng ngược hẳn ý người dùng.
+Gửi lại cũng tuần tự vì lý do đó.
+
+> Ảnh chụp chứa dữ liệu cả nhà nên **không bao giờ được ghi khi đã đăng xuất**,
+> và bị xoá ngay khi đăng xuất hoặc khi `auth.me` trả null (hết phiên). Đăng
+> xuất dùng `resetQueries` chứ không phải `invalidate` (chỉ đánh dấu cũ, dữ
+> liệu vẫn nằm đó) hay `clear` (xoá nhưng không nạp lại, giao diện kẹt ở màn
+> hình cũ).
+
 **App điện thoại (phase 7)** — vỏ Capacitor ở [apps/mobile](apps/mobile/README.md).
 Code đã xong và kênh FCM có test, nhưng **chưa build lần nào**: cần máy Mac có
 Xcode, Android SDK, và tài khoản Apple Developer (99 USD/năm) để cài lên iPhone
