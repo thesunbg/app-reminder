@@ -84,6 +84,17 @@ kiện theo kịp; xoá ngày sinh, tắt hoặc gỡ tài khoản thì sự ki�
 Sự kiện loại này **không sửa hay xoá được ở trang Sự kiện** — cho sửa cả hai
 chỗ thì hai nơi sẽ lệch nhau ngay lần đầu ai đó sửa nhầm chỗ.
 
+**Tick ngay trong Telegram.** Tin nhắc việc mang sẵn nút `✓ Xong`, `½ Làm dở`
+và `💤 Hoãn 15 phút`; bài tập có `✓ Đã làm xong`, ghi chú có hạn có `✓ Xong`
+(kèm cả việc tự đẻ ghi chú cho chu kỳ sau). Phải mở app mới tick được thì phần
+lớn lần nhắc sẽ không bao giờ được tick, và số liệu trong app thành vô nghĩa.
+
+`callback_data` chỉ được 64 byte nên mã hoá chặt (`r:<routineId>:<ngày>:<D|P>`).
+Danh tính lấy từ **chat đã liên kết**, rồi vẫn đi qua đúng luật quyền như trên
+web (`routines/mark.ts` dùng chung cho cả hai đường vào) — biết `callback_data`
+mà chat chưa liên kết thì không tick được gì. Bấm xong, bot sửa lại chính tin
+nhắn đó và gỡ nút, để mở lại lịch sử chat không bấm nhầm lần nữa.
+
 Ba kênh gửi: **Telegram** (chính), **Web Push** (trình duyệt), và **push
 native** qua FCM cho app điện thoại. Kênh nào chưa cấu hình thì tự tắt, app
 vẫn chạy. Kênh được tính lại lúc gửi chứ không chốt lúc sinh lịch — xem phần
@@ -187,7 +198,9 @@ apps/server/        Fastify + tRPC + Prisma
   src/lib/holidays.ts    danh mục lễ tết VN dựng sẵn (âm + dương), không vào DB
   src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
   src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
-  src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler
+  src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler,
+                         actions (nút bấm trong tin Telegram)
+  src/routines/mark.ts   luật tick việc, dùng chung cho web lẫn Telegram
   src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
   src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
   src/trpc/routers/      auth, family, routine, event, holiday, note, diary,

@@ -4,6 +4,7 @@ import { sendMessage } from '../lib/telegram.js'
 import { sendPushToUser } from '../lib/webpush.js'
 import { sendNativeToUser } from '../lib/fcm.js'
 import { buildDigest } from '../diary/digest.js'
+import { buttonsFor } from './actions.js'
 import { plannedChannels } from './channels.js'
 import { notificationUrl, toTelegramHtml } from './messages.js'
 
@@ -94,7 +95,9 @@ async function deliver(n: Notification): Promise<string[]> {
   for (const channel of wanted) {
     try {
       if (channel === 'telegram') {
-        await sendMessage(user.telegramChatId!, toTelegramHtml({ title, body }))
+        // nút "✓ Xong / ½ Làm dở / 💤 Hoãn" ngay dưới tin nhắn: mở app mới tick
+        // được thì phần lớn lần nhắc sẽ không bao giờ được tick
+        await sendMessage(user.telegramChatId!, toTelegramHtml({ title, body }), buttonsFor(n))
         sent.push('telegram')
       } else if (channel === 'webpush') {
         await sendPushToUser(user.id, { title, body, url, tag: n.refId })
