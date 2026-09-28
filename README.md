@@ -45,6 +45,18 @@ nhiều ngày:
 
 Giỗ âm lịch không có ngày kết thúc: một ngày giỗ là một ngày.
 
+**Ngày âm lặp hàng tháng** (`LUNAR_MONTHLY`) cho mùng 1 và ngày rằm — thứ nhà
+có bàn thờ phải nhớ nhiều nhất. Chỉ khai ngày âm, không khai tháng. Năm nhuận
+ra **13 lần** chứ không phải 12: tháng nhuận cũng có mùng 1 và ngày rằm của nó,
+bỏ qua thì năm đó mất đúng một lần cúng. Ngày 30 ở tháng thiếu lùi về 29, cùng
+quy ước với ngày giỗ.
+
+Vì một sự kiện như vậy có 12–13 lần trong cùng một năm âm, khoá của
+`EventOccurrence` đổi từ `(eventId, year)` sang **`(eventId, solarDate)`**. Đổi
+khoá thì mỗi lượt materialize phải tự dọn những lần cũ của các năm đang tính
+lại mà kế hoạch mới không còn — nếu không, sửa từ mùng 1 sang ngày rằm sẽ để
+lại đủ 12 lần cũ nằm trên lịch.
+
 **Dương lịch là mặc định** ở form thêm sự kiện — phần lớn thứ người ta thêm
 (chuyến đi, lịch hẹn, sinh nhật) đều theo dương; âm lịch để dành cho giỗ chạp.
 Bấm "+ Thêm sự kiện ngày 3/10" ngay trong ô ngày ở trang Lịch thì form mở ra với

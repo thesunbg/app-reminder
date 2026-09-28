@@ -329,7 +329,9 @@ function DayDetail({ day }: { day: Day | undefined }) {
                       m.label,
                       e.endDate ? `${dm(e.startDate)} → ${dm(e.endDate)}` : null,
                       e.startTime ? (e.endTime ? `${e.startTime}–${e.endTime}` : e.startTime) : null,
-                      e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch',
+                      e.calendar === 'LUNAR_MONTHLY'
+                        ? 'âm lịch, hàng tháng'
+                        : e.calendar === 'LUNAR' ? 'theo âm lịch' : 'theo dương lịch',
                       e.note || null,
                     ]
                       .filter(Boolean)

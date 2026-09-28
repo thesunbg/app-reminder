@@ -1,6 +1,6 @@
 import type { Event } from '@prisma/client'
 import { db } from '../db.js'
-import { lunarOf, resolveLunarAnniversary } from '../lib/lunar.js'
+import { lunarMonthLength, lunarOf, lunarToSolar, resolveLunarAnniversary, toSolarString } from '../lib/lunar.js'
 import { addDays, diffDays, vnDateTimeToUtc, vnTimeOf, vnToday } from '../lib/time.js'
 import { inQuietHours } from './materialize.js'
 import { plannedChannels } from './channels.js'
@@ -36,10 +36,36 @@ export function resolveOccurrence(event: Event, year: number): string | null {
     if (!event.lunarDay || !event.lunarMonth) return null
     return resolveLunarAnniversary(event.lunarDay, event.lunarMonth, event.lunarLeap, year)
   }
+  // LUNAR_MONTHLY có 12–13 ngày mỗi năm nên không trả về một ngày duy nhất được
+  if (event.calendar === 'LUNAR_MONTHLY') return null
 
   if (!event.solarDate) return null
   if (!event.yearly) return event.solarDate // sự kiện một lần
   return solarInYear(event.solarDate, year)
+}
+
+/**
+ * Mọi ngày dương của một ngày âm LẶP HÀNG THÁNG trong một năm âm.
+ *
+ * Tháng nhuận cũng có mùng 1 và ngày rằm của nó, nên năm nhuận ra 13 ngày chứ
+ * không phải 12 — bỏ qua tháng nhuận thì năm đó mất đúng một lần cúng.
+ * Ngày 30 ở tháng thiếu lùi về 29, cùng quy ước với ngày giỗ.
+ */
+export function lunarMonthlyDates(lunarDay: number, lunarYear: number): string[] {
+  const out: string[] = []
+  for (let month = 1; month <= 12; month++) {
+    const normal = resolveLunarAnniversary(lunarDay, month, false, lunarYear)
+    if (normal) out.push(normal)
+
+    // tháng nhuận: phải hỏi thẳng lunarToSolar vì resolveLunarAnniversary cố ý
+    // lùi về tháng thường khi năm đó không nhuận — ở đây ca đó là "không có"
+    if (lunarToSolar(1, month, lunarYear, true)) {
+      const len = lunarMonthLength(month, lunarYear, true)
+      const leap = len > 0 ? lunarToSolar(Math.min(lunarDay, len), month, lunarYear, true) : null
+      if (leap) out.push(toSolarString(leap))
+    }
+  }
+  return out.sort()
 }
 
 /**
@@ -50,7 +76,7 @@ export function resolveOccurrence(event: Event, year: number): string | null {
  * thúc quy đổi ra trước ngày bắt đầu thì nó thuộc năm sau.
  */
 export function resolveOccurrenceEnd(event: Event, year: number, start: string): string | null {
-  if (!event.endDate || event.calendar === 'LUNAR') return null
+  if (!event.endDate || event.calendar !== 'SOLAR') return null
   if (!event.yearly) return event.endDate > start ? event.endDate : null
   const sameYear = solarInYear(event.endDate, year)
   if (!sameYear) return null
@@ -59,31 +85,63 @@ export function resolveOccurrenceEnd(event: Event, year: number, start: string):
   return nextYear && nextYear > start ? nextYear : null
 }
 
-/** Sinh/cập nhật bảng cache EventOccurrence cho các năm quanh hiện tại. */
-export async function materializeEventOccurrences(now: Date = new Date()): Promise<number> {
-  const today = vnToday(now)
+type PlannedOccurrence = { year: number; solarDate: string; endDate: string | null }
+
+/** Những lần xuất hiện mà một sự kiện PHẢI có trong cache, cho các năm quanh hiện tại. */
+export function planOccurrences(event: Event, today: string): { years: number[]; rows: PlannedOccurrence[] } {
   const solarYear = Number(today.slice(0, 4))
   const lunarYear = lunarOf(today).year
+  const base = event.calendar === 'SOLAR' ? solarYear : lunarYear
+  const years = event.calendar === 'SOLAR' && !event.yearly ? [base] : YEAR_SPAN.map((d) => base + d)
 
+  const rows: PlannedOccurrence[] = []
+  for (const year of years) {
+    if (event.calendar === 'LUNAR_MONTHLY') {
+      if (!event.lunarDay) continue
+      for (const solarDate of lunarMonthlyDates(event.lunarDay, year)) {
+        rows.push({ year, solarDate, endDate: null })
+      }
+      continue
+    }
+    const solarDate = resolveOccurrence(event, year)
+    if (!solarDate) continue
+    rows.push({ year, solarDate, endDate: resolveOccurrenceEnd(event, year, solarDate) })
+  }
+  return { years, rows }
+}
+
+/**
+ * Sinh/cập nhật bảng cache EventOccurrence cho các năm quanh hiện tại.
+ *
+ * Khoá là (eventId, solarDate) chứ không phải (eventId, year): một sự kiện
+ * "mùng 1 hàng tháng" có 12–13 lần trong cùng một năm âm. Vì khoá không còn là
+ * năm, phải tự dọn những hàng cũ của các năm đang tính lại mà kế hoạch mới
+ * không còn — nếu không, sửa ngày xong sẽ còn sót lần cũ nằm lại trên lịch.
+ */
+export async function materializeEventOccurrences(now: Date = new Date()): Promise<number> {
+  const today = vnToday(now)
   const events = await db.event.findMany()
   let written = 0
 
   for (const event of events) {
-    const base = event.calendar === 'LUNAR' ? lunarYear : solarYear
-    const years = event.calendar === 'SOLAR' && !event.yearly ? [base] : YEAR_SPAN.map((d) => base + d)
+    const { years, rows } = planOccurrences(event, today)
 
-    for (const year of years) {
-      const solarDate = resolveOccurrence(event, year)
-      if (!solarDate) continue
-      const endDate = resolveOccurrenceEnd(event, year, solarDate)
-      const existing = await db.eventOccurrence.findUnique({
-        where: { eventId_year: { eventId: event.id, year } },
-      })
-      if (existing?.solarDate === solarDate && existing.endDate === endDate) continue
+    await db.eventOccurrence.deleteMany({
+      where: { eventId: event.id, year: { in: years }, solarDate: { notIn: rows.map((r) => r.solarDate) } },
+    })
+
+    const existing = await db.eventOccurrence.findMany({
+      where: { eventId: event.id, solarDate: { in: rows.map((r) => r.solarDate) } },
+    })
+    const byDate = new Map(existing.map((o) => [o.solarDate, o]))
+
+    for (const row of rows) {
+      const hit = byDate.get(row.solarDate)
+      if (hit && hit.endDate === row.endDate && hit.year === row.year) continue
       await db.eventOccurrence.upsert({
-        where: { eventId_year: { eventId: event.id, year } },
-        create: { eventId: event.id, year, solarDate, endDate },
-        update: { solarDate, endDate },
+        where: { eventId_solarDate: { eventId: event.id, solarDate: row.solarDate } },
+        create: { eventId: event.id, year: row.year, solarDate: row.solarDate, endDate: row.endDate },
+        update: { year: row.year, endDate: row.endDate },
       })
       written++
     }
@@ -118,7 +176,7 @@ function timeText(event: Event): string {
 
 function draft(event: Event, solarDate: string, endDate: string | null, daysAhead: number) {
   const what = TYPE_WORD[event.type] ?? 'Sự kiện'
-  const lunar = event.calendar === 'LUNAR' ? lunarOf(solarDate) : null
+  const lunar = event.calendar === 'SOLAR' ? null : lunarOf(solarDate)
   // sự kiện nhiều ngày: nói rõ cả khoảng, nếu không người đọc tưởng chỉ một ngày
   const span = endDate ? `${dayMonthOf(solarDate)} → ${dayMonthOf(endDate)}` : dayMonthOf(solarDate)
   const lunarText = lunar ? ` (${lunar.day}/${lunar.month}${lunar.leap ? ' nhuận' : ''} âm lịch)` : ''

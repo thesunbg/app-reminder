@@ -6,6 +6,7 @@ import { lunarMonthLength, lunarOf, lunarToSolar, toSolarString } from '../../li
 import { addDays, dateRange, diffDays, vnToday } from '../../lib/time.js'
 import {
   clearEventNotifications,
+  lunarMonthlyDates,
   materializeEventOccurrences,
   materializeEvents,
   resolveLunarAnniversary,
@@ -33,6 +34,15 @@ const lunarInput = baseInput.extend({
   lunarLeap: z.boolean().default(false),
 })
 
+/**
+ * Ngày âm lặp HÀNG THÁNG: mùng 1, ngày rằm. Không có `lunarMonth` — đó là cả
+ * điểm của nó — và cũng không có ngày kết thúc.
+ */
+const lunarMonthlyInput = baseInput.extend({
+  calendar: z.literal('LUNAR_MONTHLY'),
+  lunarDay: z.number().int().min(1).max(30),
+})
+
 const solarInput = baseInput.extend({
   calendar: z.literal('SOLAR'),
   // "MM-DD" khi lặp hàng năm, "YYYY-MM-DD" khi chỉ một lần
@@ -42,10 +52,11 @@ const solarInput = baseInput.extend({
   endDate: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/).nullish(),
 })
 
-const createInput = z.discriminatedUnion('calendar', [lunarInput, solarInput])
+const createInput = z.discriminatedUnion('calendar', [lunarInput, lunarMonthlyInput, solarInput])
 
 const updateInput = z.discriminatedUnion('calendar', [
   lunarInput.extend({ id: z.string() }),
+  lunarMonthlyInput.extend({ id: z.string() }),
   solarInput.extend({ id: z.string() }),
 ])
 
@@ -55,6 +66,13 @@ const updateInput = z.discriminatedUnion('calendar', [
  * lại solarDate cũ thì lần sinh occurrence sau sẽ đọc nhầm.
  */
 function toData(input: z.infer<typeof createInput>) {
+  if (input.calendar === 'LUNAR_MONTHLY') {
+    const { calendar, lunarDay, ...common } = input
+    return {
+      ...common, calendar, lunarDay, lunarMonth: null, lunarLeap: false,
+      solarDate: null, yearly: true, endDate: null,
+    }
+  }
   if (input.calendar === 'LUNAR') {
     const { calendar, lunarDay, lunarMonth, lunarLeap, ...common } = input
     return {
@@ -218,7 +236,7 @@ export const eventRouter = router({
         nextEndDate: next?.endDate ?? null,
         daysUntil: next ? diffDays(today, next.solarDate) : null,
         ongoing: next ? next.solarDate <= today : false,
-        nextLunar: next && e.calendar === 'LUNAR' ? lunarOf(next.solarDate) : null,
+        nextLunar: next && e.calendar !== 'SOLAR' ? lunarOf(next.solarDate) : null,
       }
     })
   }),
@@ -244,7 +262,7 @@ export const eventRouter = router({
         ongoing: o.solarDate <= today,
         dayIndex: o.solarDate <= today ? diffDays(o.solarDate, today) + 1 : 1,
         dayCount: diffDays(o.solarDate, o.endDate ?? o.solarDate) + 1,
-        lunar: o.event.calendar === 'LUNAR' ? lunarOf(o.solarDate) : null,
+        lunar: o.event.calendar === 'SOLAR' ? null : lunarOf(o.solarDate),
         event: o.event,
       }))
     }),
@@ -342,6 +360,22 @@ export const eventRouter = router({
         out.push({ lunarYear: y, solarDate, usedLeap: canLeap, usedDay })
       }
       return out
+    }),
+
+  /**
+   * Xem trước: ngày âm hàng tháng này rơi vào những ngày dương nào sắp tới.
+   * Mùng 1 và ngày rằm chạy quanh lịch dương nên không nhìn là biết được.
+   */
+  previewLunarMonthly: protectedProcedure
+    .input(z.object({ lunarDay: z.number().int().min(1).max(30), count: z.number().int().min(1).max(12).default(4) }))
+    .query(({ input }) => {
+      const today = vnToday()
+      const base = lunarOf(today).year
+      const dates = [...lunarMonthlyDates(input.lunarDay, base), ...lunarMonthlyDates(input.lunarDay, base + 1)]
+      return dates
+        .filter((d) => d >= today)
+        .slice(0, input.count)
+        .map((solarDate) => ({ solarDate, lunar: lunarOf(solarDate) }))
     }),
 
   /** Đổi ngày dương sang âm — dùng khi người dùng chỉ nhớ ngày dương của đám giỗ. */

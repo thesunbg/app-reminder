@@ -6,6 +6,7 @@ import { addDays, vnDateTimeToUtc, vnToday } from '../src/lib/time.js'
 import {
   clearEventNotifications,
   eventRef,
+  lunarMonthlyDates,
   materializeEventOccurrences,
   materializeEvents,
   resolveLunarAnniversary,
@@ -446,5 +447,85 @@ describe('sự kiện nhiều ngày', () => {
       yearly: false, remindBeforeDays: [0], remindAtTime: '08:00',
     })
     assert.equal(same.endDate, null)
+  })
+})
+
+// ---------- ngày âm lặp hàng tháng (mùng 1, ngày rằm) ----------
+
+describe('ngày âm hàng tháng', () => {
+  it('năm thường có 12 lần, năm nhuận có 13', () => {
+    // 2025 âm nhuận tháng 6, 2026 âm không nhuận
+    assert.equal(lunarMonthlyDates(1, 2026).length, 12)
+    assert.equal(lunarMonthlyDates(1, 2025).length, 13, 'tháng nhuận cũng có mùng 1 của nó')
+  })
+
+  it('mỗi lần đúng là ngày âm đã chọn', () => {
+    for (const date of lunarMonthlyDates(15, 2026)) {
+      assert.equal(lunarOf(date).day, 15, `${date} không phải ngày rằm`)
+    }
+  })
+
+  it('ngày 30 ở tháng thiếu lùi về 29, không bỏ tháng nào', () => {
+    const dates = lunarMonthlyDates(30, 2026)
+    assert.equal(dates.length, 12, 'tháng thiếu vẫn phải có một lần')
+    for (const date of dates) {
+      const l = lunarOf(date)
+      assert.ok(l.day === 29 || l.day === 30, `${date} là ngày ${l.day}`)
+    }
+  })
+
+  it('không trả ngày trùng nhau và đã sắp tăng dần', () => {
+    const dates = lunarMonthlyDates(1, 2025)
+    assert.equal(new Set(dates).size, dates.length)
+    assert.deepEqual(dates, [...dates].sort())
+  })
+
+  it('sinh đủ occurrence cho nhiều năm và nằm trên lịch', async () => {
+    const event = await makeEvent({
+      title: 'Thắp hương mùng 1', type: 'OTHER', calendar: 'LUNAR_MONTHLY',
+      lunarDay: 1, lunarMonth: null, remindBeforeDays: [0],
+    })
+    await materializeEventOccurrences()
+
+    const rows = await db.eventOccurrence.findMany({ where: { eventId: event.id } })
+    // 4 năm âm (YEAR_SPAN) × 12–13 lần
+    assert.ok(rows.length >= 48, `mới có ${rows.length} lần`)
+    for (const r of rows) assert.equal(lunarOf(r.solarDate).day, 1)
+
+    // chạy lại không đẻ thêm
+    const before = await db.eventOccurrence.count({ where: { eventId: event.id } })
+    await materializeEventOccurrences()
+    assert.equal(await db.eventOccurrence.count({ where: { eventId: event.id } }), before)
+  })
+
+  it('đổi từ mùng 1 sang ngày rằm thì các lần cũ bị dọn sạch', async () => {
+    const event = await makeEvent({
+      title: 'Thắp hương', type: 'OTHER', calendar: 'LUNAR_MONTHLY',
+      lunarDay: 1, lunarMonth: null, remindBeforeDays: [0],
+    })
+    await materializeEventOccurrences()
+    await db.event.update({ where: { id: event.id }, data: { lunarDay: 15 } })
+    await materializeEventOccurrences()
+
+    const rows = await db.eventOccurrence.findMany({ where: { eventId: event.id } })
+    for (const r of rows) {
+      assert.equal(lunarOf(r.solarDate).day, 15, `${r.solarDate} vẫn là lần cũ còn sót lại`)
+    }
+  })
+
+  it('nhắc gọi đúng tên ngày âm của hôm đó', async () => {
+    const event = await makeEvent({
+      title: 'Thắp hương ngày rằm', type: 'OTHER', calendar: 'LUNAR_MONTHLY',
+      lunarDay: 15, lunarMonth: null, remindBeforeDays: [1, 0], remindAtTime: '06:00',
+    })
+    await materializeEventOccurrences()
+    await materializeEvents()
+
+    const n = await db.notification.findFirst({
+      where: { userId: parentId, refTable: 'event', refId: { startsWith: `${event.id}:` } },
+      orderBy: { fireAt: 'asc' },
+    })
+    assert.ok(n, 'phải có nhắc')
+    assert.match(n.body, /15\/\d+ âm lịch/, 'nội dung phải ghi ngày âm')
   })
 })

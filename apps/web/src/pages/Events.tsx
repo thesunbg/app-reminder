@@ -5,13 +5,26 @@ import { fullDate, today, weekdayShort } from '@/lib/format'
 import { holidayMeta, holidaySpan, lunarLabel } from '@/lib/holidays'
 import { trpc, type RouterOutputs } from '@/lib/trpc'
 
-type Calendar = 'LUNAR' | 'SOLAR'
+type Calendar = 'LUNAR' | 'LUNAR_MONTHLY' | 'SOLAR'
 type EventType = 'DEATH_ANNIVERSARY' | 'BIRTHDAY' | 'OTHER'
 
 const TYPE_META: Record<EventType, { label: string; icon: string; color: string }> = {
   DEATH_ANNIVERSARY: { label: 'Ngày giỗ', icon: '🕯', color: '#7c3aed' },
   BIRTHDAY: { label: 'Sinh nhật', icon: '🎂', color: '#db2777' },
   OTHER: { label: 'Sự kiện', icon: '📌', color: '#0891b2' },
+}
+
+const CALENDAR_TABS: Array<[Calendar, string]> = [
+  ['SOLAR', 'Dương lịch'],
+  ['LUNAR', 'Âm lịch (giỗ)'],
+  ['LUNAR_MONTHLY', 'Mùng 1 · Rằm'],
+]
+
+/** "Mùng 1", "Ngày rằm", hay "Ngày 10 âm" — cách người Việt thật sự gọi. */
+export function lunarDayLabel(day: number): string {
+  if (day === 1) return 'Mùng 1'
+  if (day === 15) return 'Ngày rằm'
+  return `Ngày ${day} âm`
 }
 
 const PRESET_REMIND: Array<{ label: string; days: number[] }> = [
@@ -109,6 +122,7 @@ export default function Events() {
                         o.lunar
                           ? `${o.lunar.day}/${o.lunar.month}${o.lunar.leap ? ' nhuận' : ''} âm lịch`
                           : 'dương lịch',
+                        o.event.calendar === 'LUNAR_MONTHLY' ? 'hàng tháng' : null,
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -151,7 +165,9 @@ export default function Events() {
                   {meta.icon} {e.title}
                 </p>
                 <p className="truncate text-xs" style={{ color: 'var(--muted)' }}>
-                  {e.calendar === 'LUNAR'
+                  {e.calendar === 'LUNAR_MONTHLY'
+                    ? `${lunarDayLabel(e.lunarDay ?? 1)} hàng tháng (âm lịch)`
+                    : e.calendar === 'LUNAR'
                     ? `${e.lunarDay}/${e.lunarMonth}${e.lunarLeap ? ' nhuận' : ''} âm lịch`
                     : `${e.solarDate?.slice(-5).split('-').reverse().join('/')}${
                         e.endDate ? ` → ${e.endDate.slice(-5).split('-').reverse().join('/')}` : ''
@@ -353,6 +369,10 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
     { lunarDay, lunarMonth, lunarLeap, years: 4 },
     { enabled: calendar === 'LUNAR' },
   )
+  const monthlyPreview = trpc.event.previewLunarMonthly.useQuery(
+    { lunarDay, count: 4 },
+    { enabled: calendar === 'LUNAR_MONTHLY' },
+  )
 
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(solarDate)
   const endOk = endDate === '' || /^\d{4}-\d{2}-\d{2}$/.test(endDate)
@@ -360,7 +380,8 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
   // được vắt qua giao thừa (28/12 → 2/1), server đã cho phép ca đó.
   const rangeOk = !endDate || yearly || endDate >= solarDate
   const valid =
-    title.trim().length > 0 && (calendar === 'LUNAR' || (dateOk && endOk && rangeOk))
+    (title.trim().length > 0 || calendar === 'LUNAR_MONTHLY') &&
+    (calendar !== 'SOLAR' || (dateOk && endOk && rangeOk))
 
   const times = {
     startTime: startTime || null,
@@ -368,6 +389,13 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
   }
 
   function submit() {
+    if (calendar === 'LUNAR_MONTHLY') {
+      create.mutate({
+        calendar: 'LUNAR_MONTHLY', title: title.trim() || lunarDayLabel(lunarDay), type, lunarDay,
+        remindBeforeDays, remindAtTime, note: note.trim() || null, ...times,
+      })
+      return
+    }
     if (calendar === 'LUNAR') {
       create.mutate({
         calendar: 'LUNAR', title: title.trim(), type, lunarDay, lunarMonth, lunarLeap,
@@ -388,14 +416,14 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
   return (
     <Card className="mb-4 flex flex-col gap-3 p-4">
       <div className="flex gap-1 rounded-xl p-1" style={{ background: 'var(--surface-2)' }}>
-        {(['SOLAR', 'LUNAR'] as const).map((c) => (
+        {CALENDAR_TABS.map(([c, label]) => (
           <button
             key={c}
             onClick={() => setCalendar(c)}
             className="flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold"
             style={calendar === c ? { background: 'var(--surface)', color: 'var(--brand)' } : { color: 'var(--muted)' }}
           >
-            {c === 'LUNAR' ? 'Âm lịch (giỗ)' : 'Dương lịch'}
+            {label}
           </button>
         ))}
       </div>
@@ -406,7 +434,13 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
           className="input-base"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={calendar === 'LUNAR' ? 'Giỗ ông nội' : yearly ? 'Sinh nhật mẹ' : 'Đi Mù Cang Chải'}
+          placeholder={
+            calendar === 'LUNAR'
+              ? 'Giỗ ông nội'
+              : calendar === 'LUNAR_MONTHLY'
+                ? lunarDayLabel(lunarDay)
+                : yearly ? 'Sinh nhật mẹ' : 'Đi Mù Cang Chải'
+          }
         />
       </label>
 
@@ -419,7 +453,55 @@ function EventForm({ presetDate, onDone }: { presetDate?: string | null; onDone:
         </select>
       </label>
 
-      {calendar === 'LUNAR' ? (
+      {calendar === 'LUNAR_MONTHLY' ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-semibold" style={{ color: 'var(--muted)' }}>Ngày âm, lặp mỗi tháng</span>
+            <div className="flex gap-2">
+              {[1, 15].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setLunarDay(d)}
+                  className="btn btn-ghost flex-1 !py-1.5 text-xs"
+                  style={lunarDay === d ? { color: 'var(--brand)', borderColor: 'var(--brand)' } : undefined}
+                >
+                  {lunarDayLabel(d)}
+                </button>
+              ))}
+              <select
+                className="input-base !w-24"
+                value={lunarDay}
+                onChange={(e) => setLunarDay(Number(e.target.value))}
+                aria-label="Ngày âm khác"
+              >
+                {Array.from({ length: 30 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>ngày {d}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="rounded-xl p-3 text-sm" style={{ background: 'var(--surface-2)' }}>
+            <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+              Những lần tới rơi vào:
+            </p>
+            {monthlyPreview.isLoading && <p className="text-xs" style={{ color: 'var(--muted)' }}>Đang tính…</p>}
+            <ul className="flex flex-col gap-1">
+              {(monthlyPreview.data ?? []).map((p) => (
+                <li key={p.solarDate} className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs font-medium">{fullDate(p.solarDate)}</span>
+                  <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                    {p.lunar.day}/{p.lunar.month}{p.lunar.leap ? ' nhuận' : ''} âm
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs" style={{ color: 'var(--muted)' }}>
+              Năm nhuận có 13 lần — tháng nhuận cũng có {lunarDayLabel(lunarDay).toLowerCase()} của nó.
+            </p>
+          </div>
+        </>
+      ) : calendar === 'LUNAR' ? (
         <>
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1.5">

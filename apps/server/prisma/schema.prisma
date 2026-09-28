@@ -20,6 +20,9 @@ enum Role {
 enum CalendarType {
   SOLAR
   LUNAR
+  /// Lặp theo NGÀY ÂM HÀNG THÁNG (mùng 1, ngày rằm) — mỗi năm 12–13 lần, kể cả
+  /// tháng nhuận. Chỉ dùng `lunarDay`; `lunarMonth` để null.
+  LUNAR_MONTHLY
 }
 
 enum EventType {
@@ -284,6 +287,8 @@ model EventOccurrence {
   id      String @id @default(cuid())
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// Năm dùng để sinh ra lần này: năm ÂM với LUNAR/LUNAR_MONTHLY, năm DƯƠNG với
+  /// SOLAR. Không còn là khoá duy nhất kể từ khi có ngày âm hàng tháng.
   year    Int
   solarDate String // "YYYY-MM-DD" — ngày bắt đầu
   /// Ngày kết thúc đã quy đổi cho năm này; null = sự kiện một ngày.
@@ -291,7 +296,10 @@ model EventOccurrence {
   /// độ dài từ Event mỗi lần vẽ lưới.
   endDate   String?
 
-  @@unique([eventId, year])
+  // Khoá theo NGÀY chứ không theo năm: sự kiện "mùng 1 hàng tháng" có 12–13 lần
+  // trong cùng một năm âm, khoá theo năm thì chúng ghi đè lẫn nhau.
+  @@unique([eventId, solarDate])
+  @@index([eventId, year])
   @@index([solarDate])
   @@index([endDate])
 }
