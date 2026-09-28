@@ -154,6 +154,17 @@ iPhone chỉ làm hỏng cái lịch đó.
 > [deploy/Caddyfile](deploy/Caddyfile), nếu không nó rơi xuống nhánh SPA và trả
 > `index.html` kèm mã 200 — phần mềm lịch nhận HTML và báo "lịch không hợp lệ".
 
+**Tìm kiếm toàn cục** (`/tim-kiem`) quét ghi chú, nhật ký, bài tập, sự kiện và
+việc định kỳ. Gõ **không dấu** vẫn ra ("gio ong noi" → "Giỗ ông nội"): cả hai
+vế đi qua hàm `vn_unaccent` tự viết trong migration — không dùng extension
+`unaccent` vì nó cần quyền superuser mà máy chủ quản lý có nơi không cho. Quy
+mô gia đình thì quét bảng đã đủ nhanh; hàm khai `IMMUTABLE` sẵn nên khi nào
+chậm thì thêm `pg_trgm` và index hoá được ngay.
+
+Kết quả tôn trọng đúng quyền xem trong app: **nhật ký riêng tư của người khác
+và ghi chú riêng của người khác không bao giờ lọt vào** — có test riêng cho
+từng ca, vì đây là thứ hỏng âm thầm và chỉ phát hiện ra khi đã muộn.
+
 Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 - **2 bước**: TOTP chuẩn RFC 6238, tự viết ([lib/totp.ts](apps/server/src/lib/totp.ts)),
   bí mật mã hoá AES-GCM bằng `SESSION_SECRET`, 8 mã khôi phục lưu dạng hash.
@@ -243,10 +254,10 @@ apps/server/        Fastify + tRPC + Prisma
   src/screen/            nhận báo cáo từ agent máy tính + tổng hợp
   src/diary/             nhật ký tự động (từ việc đã tick và từ máy tính)
   src/trpc/routers/      auth, family, routine, event, holiday, note, diary,
-                         notify, stats, study, screen
+                         notify, search, stats, study, screen
 apps/web/           React 19 + Vite + Tailwind 4 + PWA
   src/pages/             Today, Week, Diary, Notes, Events, Calendar, Stats,
-                         Study, Routines, Settings, Login
+                         Study, Routines, Search, Settings, Login
   src/lib/native.ts      cầu nối Capacitor: push token + local notification
 apps/mobile/        vỏ Capacitor (iOS/Android) — ngoài pnpm workspace
 apps/agent/         agent máy tính, không dependency — ngoài pnpm workspace
