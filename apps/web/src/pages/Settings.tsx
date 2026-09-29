@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import BackupSettings from '@/components/BackupSettings'
 import CalendarFeed from '@/components/CalendarFeed'
 import NotifyLog from '@/components/NotifyLog'
 import NotifySettings from '@/components/NotifySettings'
@@ -103,6 +104,8 @@ export default function Settings() {
       </Card>
 
       <SecuritySettings />
+
+      <BackupSettings />
 
       <NotifyLog />
     </div>

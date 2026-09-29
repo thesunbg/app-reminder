@@ -20,6 +20,7 @@ backend tự chủ trên VPS. Kế hoạch đầy đủ: [docs/PLAN.md](docs/PLA
 | 8 | Agent máy tính: thời lượng dùng app, nhật ký tự động từ máy | ✅ xong |
 | 9 | **Tick việc trong Telegram**, mùng 1/rằm, lịch .ics, chuỗi ngày + huy hiệu | ✅ xong |
 | 10 | **Sổ sức khoẻ**, tìm kiếm toàn cục, nhắc thời khoá biểu, tổng kết tuần, offline | ✅ xong |
+| 11 | **Sao lưu & khôi phục**: tải một file JSON đủ dựng lại cả nhà, nạp lại theo kiểu "dựng lại" hoặc "bù phần thiếu" | ✅ xong |
 
 Engine nhắc nhở đã chạy: sinh lịch trước 14 ngày (việc hàng ngày) / 60 ngày
 (giỗ, sinh nhật), gửi qua Telegram và/hoặc Web Push, tự huỷ khi bạn đã tick
@@ -211,6 +212,7 @@ Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
   `WEB_ORIGIN` — đổi domain là passkey cũ vô hiệu (đúng thiết kế WebAuthn).
 - **Tải dữ liệu**: `GET /export` trả JSON theo đúng quyền xem trong app —
   phụ huynh cả nhà, con của mình; nhật ký riêng tư của người khác không lọt ra.
+  Đây là bản để *đọc và mang đi*, không nạp ngược lại được.
 
 > **Passkey chưa được bấm thử trên thiết bị thật** — server có test đi hết
 > đường đăng ký → đăng nhập bằng authenticator phần mềm (ES256), nhưng
@@ -225,6 +227,54 @@ Bảo mật tài khoản (Cài đặt → Bảo mật & dữ liệu):
 > **Push native (FCM) cũng vậy.** Test dùng service account sinh tại chỗ và
 > verify chữ ký RS256, nhưng chưa có request nào đi tới Google thật. Đừng coi
 > phase 7 là xong cho tới khi bấm “Gửi thử” trên điện thoại thật.
+
+### Sao lưu & khôi phục
+
+`GET /export` ở trên trả lời câu "cho tôi xem dữ liệu của tôi". Nó **không** trả
+lời được câu "máy chủ mất rồi, làm lại từ đâu": nó lọc theo quyền xem nên thiếu
+nhật ký riêng của người khác, thiếu mật khẩu, thiếu agent, và không có đường nạp
+ngược. Phần này lấp đúng chỗ đó (Cài đặt → Sao lưu & khôi phục, **chỉ quản trị
+gia đình thấy**):
+
+| | Tải xuống | Khôi phục |
+|---|---|---|
+| Đường | `GET /backup` (`?anh=0` để bỏ ảnh đề bài) | `POST /backup/restore` |
+| Nội dung | toàn bộ 14 bảng của một gia đình | file vừa tải về |
+
+Hai chế độ khôi phục, chọn ở giao diện:
+
+- **Dựng lại từ đầu** (`replace`) — xoá sạch dữ liệu của gia đình rồi chép
+  nguyên file vào. Kết quả giống hệt lúc bấm tải. Mọi người **bị đăng xuất** và
+  đăng nhập lại bằng mật khẩu tại thời điểm sao lưu. Bắt gõ tay chữ `DUNG LAI`,
+  **kiểm ở server** chứ không chỉ chặn ở giao diện, giống `removeMember`.
+- **Bù phần thiếu** (`merge`) — chỉ chèn dòng chưa có, không xoá và không ghi đè
+  gì. Dùng khi lỡ tay xoá một mảng dữ liệu mà không muốn mất những gì đã ghi
+  thêm sau đó. Người trùng email nhưng khác mã vẫn được nối lại đúng dữ liệu cũ,
+  nhờ một bảng ánh xạ id theo email.
+
+**Luôn xem trước trước khi ghi.** Nút xem trước chạy đúng đường code của lần
+khôi phục thật rồi `ROLLBACK` ở bước cuối, nên con số hiện ra là số thật chứ
+không phải ước lượng bằng code khác.
+
+Trong file có: thành viên (kèm `passwordHash`), việc định kỳ + lượt tick, sự
+kiện + lần xảy ra, ghi chú + mục, nhật ký (cả phần riêng tư), thời khoá biểu,
+bài tập + điểm + ảnh đề bài, sổ sức khoẻ, agent máy tính + thời lượng dùng máy.
+
+Không có trong file, **có chủ đích**: session, thiết bị Web Push / native,
+passkey (gắn với một máy và một domain cụ thể), và hàng đợi `Notification`
+(scheduler sinh lại trong 15 phút). Bí mật TOTP có đi theo nhưng mã hoá bằng
+`SESSION_SECRET`; nạp sang máy chủ có secret khác thì giải mã không ra, lúc đó
+**2 bước tự tắt** cho tài khoản đó kèm cảnh báo — thà bắt bật lại còn hơn khoá
+chính chủ ở ngoài cửa.
+
+> **File này chứa hash mật khẩu của cả nhà. Giữ nó như giữ mật khẩu.** Đó cũng
+> là lý do cả hai đường đều chặn ở mức quản trị gia đình chứ không phải phụ
+> huynh nói chung.
+
+Nó **không thay** `deploy/backup.sh`. Dump `pg_dump` hằng đêm vẫn là lưới an
+toàn chính (tự động, có cả bảng không nằm trong file này); cái ở đây là thứ
+người dùng tự bấm được, không cần SSH, và là cách duy nhất để **thử restore mỗi
+tháng một lần** mà không phải dựng lại cả máy chủ.
 
 ## Yêu cầu
 
@@ -283,6 +333,7 @@ apps/server/        Fastify + tRPC + Prisma
   src/lib/lunar.ts       âm lịch VN (Hồ Ngọc Đức, UTC+7)
   src/lib/holidays.ts    danh mục lễ tết VN dựng sẵn (âm + dương), không vào DB
   src/ical.ts            /calendar.ics — lịch .ics để đăng ký ở Lịch iPhone
+  src/backup/            sao lưu & khôi phục: format (zod), build, restore, route
   src/lib/fcm.ts         push native qua FCM HTTP v1 (tự ký JWT service account)
   src/lib/appCategory.ts xếp tên app vào nhóm cho báo cáo thời lượng
   src/notifications/     engine nhắc: channels, materialize, dispatch, scheduler,
@@ -456,7 +507,7 @@ Production: **https://reminder.nguyenvando.com**
   redirect 80→443, HTTP/2 và HSTS. Sửa vhost thì **comment phải ASCII không
   dấu** — certbot 0.31 ở đó chạy Python 2 và chết với `UnicodeDecodeError`.
 - Trong container: Caddy serve PWA tĩnh + proxy `/trpc`, `/health`, `/export`,
-  `/agent/*` → server. Scheduler chạy ngay trong tiến trình server nên không có
+  `/backup*`, `/agent/*` → server. Scheduler chạy ngay trong tiến trình server nên không có
   service nào khác phải giữ sống.
   **Thêm route REST mới ở server thì phải thêm một `handle` trong
   [deploy/Caddyfile](deploy/Caddyfile)**, nếu không nó rơi xuống nhánh SPA và
@@ -480,3 +531,9 @@ crontab -e
 ```
 
 Backup không phải việc làm sau. Dữ liệu này không có bản sao ở đâu khác.
+Ngoài dump hằng đêm ở trên, quản trị còn tự tải được một file JSON đủ dựng lại
+cả nhà ngay trong app — xem mục **Sao lưu & khôi phục**. Đường nạp lại
+(`POST /backup/restore`) nhận file tới 100MB nên nginx phải có `location` riêng
+nới `client_max_body_size` (mặc định của vhost là 20m) và `proxy_read_timeout`;
+bản mẫu nằm trong [deploy/nginx-reminder.conf](deploy/nginx-reminder.conf), nhớ
+chép sang file thật trên máy chủ.

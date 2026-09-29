@@ -253,6 +253,36 @@ không phải build lại app. Chi tiết trong `apps/mobile/capacitor.config.ts
 
 ---
 
+### 5.7 Sao lưu & khôi phục trong app: vì sao cần, khi đã có `pg_dump`
+
+`pg_dump` hằng đêm vẫn là lưới an toàn chính và không thay thế được. Nhưng nó
+có hai lỗ mà chỉ người tự host mới thấy:
+
+1. **Không ai thử restore.** Dòng "kiểm tra restore 1 lần/tháng" ở mục 6 đòi
+   SSH vào máy chủ, dựng một DB tạm, và biết `psql`. Việc phiền như vậy làm mỗi
+   tháng một lần thì sẽ không ai làm, và một bản backup chưa từng được nạp lại
+   thì chưa phải là backup. Bấm một nút *Xem trước* trong Cài đặt thì làm được
+   hằng tháng thật.
+2. **Không sửa được sai lầm nhỏ.** `pg_dump` là tất-cả-hoặc-không-gì. Lỡ tay
+   *Gỡ hẳn* một thành viên (mục 5.4 — cascade, không hoàn tác được) thì lựa
+   chọn duy nhất là cuộn cả DB về đêm qua, mất luôn mọi thứ ghi trong ngày. Chế
+   độ **bù phần thiếu** chèn lại đúng phần đã mất và không đụng vào phần khác.
+
+Quyết định kèm theo:
+
+- **Chỉ quản trị gia đình**, không phải phụ huynh nói chung: file có
+  `passwordHash` của cả nhà, và một trong hai chế độ xoá sạch dữ liệu. Đúng
+  cùng mức quyền với `removeMember`.
+- **Xem trước chạy đúng code của lần ghi thật rồi `ROLLBACK`.** Viết một hàm
+  "ước lượng" riêng nghĩa là có hai nguồn sự thật, và nguồn ít được chạy hơn sẽ
+  âm thầm sai — đúng vào lúc người ta cần tin nó nhất.
+- **Không chở session, thiết bị push, passkey.** Chúng gắn với một máy và một
+  domain; chép sang chỗ khác không dùng được, mà lại làm file to và nhạy cảm
+  thêm.
+- **Bí mật TOTP đi theo nhưng tự tắt nếu không giải mã được.** Nó mã hoá bằng
+  `SESSION_SECRET`; máy chủ mới có secret khác thì bật 2 bước với một bí mật
+  hỏng là khoá chính chủ ở ngoài cửa tài khoản của họ.
+
 ## 6. Rủi ro cần canh
 
 | Rủi ro | Giảm thiểu |
@@ -262,7 +292,7 @@ không phải build lại app. Chi tiết trong `apps/mobile/capacitor.config.ts
 | Sai múi giờ/DST | Lưu toàn bộ UTC, hiển thị theo `Asia/Ho_Chi_Minh`, test quanh mốc nửa đêm |
 | Làm quá nhiều tính năng rồi bỏ dở | Bám phase 1 → dùng thật → mới làm tiếp |
 | Con thấy bị giám sát, phản ứng | Minh bạch: nói rõ app ghi nhận gì; giữ nhật ký con riêng tư |
-| Mất dữ liệu | `pg_dump` hằng đêm lên object storage, kiểm tra restore 1 lần/tháng |
+| Mất dữ liệu | `pg_dump` hằng đêm lên object storage, kiểm tra restore 1 lần/tháng. Thêm sao lưu/khôi phục ngay trong app (mục 5.7) để việc thử restore hằng tháng không cần SSH — thứ phải làm bằng tay mỗi tháng mà lại phiền thì sẽ không ai làm |
 | Phase 7 chưa từng build thật | Phần server (FCM) có test; phần app chỉ chạy được sau khi có Xcode + Apple Developer. Đừng coi là "xong" cho tới khi bấm **Gửi thử** trên máy thật. |
 | Agent chạy mà không ai biết nó im | `lastReportAt` hiện ở màn hình Máy tính — quá một ngày không có báo cáo nghĩa là agent chết hoặc mất quyền Accessibility |
 | macOS không cấp quyền Accessibility | Agent vẫn chạy nhưng mọi mẫu đều rỗng và **không báo lỗi gì**. Kiểm tra bằng cách nhìn báo cáo sau 10 phút đầu. |

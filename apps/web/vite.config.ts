@@ -28,7 +28,7 @@ export default defineConfig({
       },
       workbox: {
         // API không cache — dữ liệu nhắc việc phải luôn tươi.
-        navigateFallbackDenylist: [/^\/trpc/, /^\/export/],
+        navigateFallbackDenylist: [/^\/trpc/, /^\/export/, /^\/backup/],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // handler cho push + notificationclick; file JS thuần ở public/
         importScripts: ['/push-handler.js'],
@@ -45,6 +45,7 @@ export default defineConfig({
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
       '/export': { target: 'http://localhost:3001', changeOrigin: true },
+      '/backup': { target: 'http://localhost:3001', changeOrigin: true },
       '/calendar.ics': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },
@@ -55,6 +56,7 @@ export default defineConfig({
     proxy: {
       '/trpc': { target: 'http://localhost:3001', changeOrigin: true },
       '/export': { target: 'http://localhost:3001', changeOrigin: true },
+      '/backup': { target: 'http://localhost:3001', changeOrigin: true },
       '/calendar.ics': { target: 'http://localhost:3001', changeOrigin: true },
     },
   },

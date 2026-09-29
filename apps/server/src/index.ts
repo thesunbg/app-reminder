@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie'
 import cors from '@fastify/cors'
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
 import Fastify from 'fastify'
+import { registerBackupRoute } from './backup/route.js'
 import { db } from './db.js'
 import { env, isProd } from './env.js'
 import { registerExportRoute } from './export.js'
@@ -41,6 +42,7 @@ await app.register(fastifyTRPCPlugin, {
 })
 
 await registerExportRoute(app)
+await registerBackupRoute(app)
 await registerIcalRoute(app)
 await registerAgentRoute(app)
 await registerStudyAttachmentRoute(app)
